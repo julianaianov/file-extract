@@ -26,6 +26,7 @@ interface ContentData {
   transcription?: string;
   transcriptionStatus?: string;
   message?: string;
+  ocrText?: string;
 }
 
 export function FilePreview({ file, onClose }: FilePreviewProps) {
@@ -108,6 +109,14 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
                 className="max-h-[60vh] max-w-full rounded-lg object-contain"
               />
             </div>
+            {content.ocrText && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Texto extraido (OCR):</p>
+                <div className="rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap">
+                  {content.ocrText}
+                </div>
+              </div>
+            )}
           </div>
         );
 

@@ -236,6 +236,24 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
                 <Button size="sm" variant="ghost" onClick={() => setPreviewFile(file)}>
                   <Eye className="h-4 w-4" />
                 </Button>
+                {file.file_type === 'image' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      const res = await fetch('/api/ocr', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileId: file.id }),
+                      });
+                      if (res.ok) {
+                        onChanged?.();
+                      }
+                    }}
+                  >
+                    Extrair Texto
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => handleDownload(file)}>
                   <Download className="h-4 w-4" />
                 </Button>

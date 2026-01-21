@@ -244,6 +244,16 @@ export function deleteExtractedFile(id: number): void {
   stmt.run(id);
 }
 
+export function updateContentText(id: number, contentText: string): void {
+  const db = getDb();
+  const stmt = db.prepare(`
+    UPDATE extracted_files
+    SET content_text = ?
+    WHERE id = ?
+  `);
+  stmt.run(contentText, id);
+}
+
 export function getPendingAudioFiles(): ExtractedFile[] {
   const db = getDb();
   const stmt = db.prepare(`
