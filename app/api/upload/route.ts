@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createUpload, updateUploadStatus, createExtractedFile, type ExtractedFile } from '@/lib/db';
+import { isSearchEnabled, indexExtractedFile } from '@/lib/search';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import fs from 'fs';
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
         }
 
         // Criar registro do arquivo extraído
-        createExtractedFile(
+        const newId = createExtractedFile(
           uploadId,
           filename,
           extractedPath,
@@ -161,6 +162,25 @@ export async function POST(request: Request) {
           contentText,
           fileType === 'audio' ? 'pending' : 'not_applicable'
         );
+        // Indexar no Elasticsearch (assíncrono, sem bloquear)
+        if (isSearchEnabled()) {
+          // montar objeto mínimo para indexação
+          const fileDoc: ExtractedFile = {
+            id: newId,
+            upload_id: uploadId,
+            filename,
+            file_path: extractedPath,
+            file_type: fileType,
+            file_size: entry.header.size,
+            mime_type: mimeType,
+            extracted_date: new Date().toISOString(),
+            content_text: contentText ?? null,
+            transcription: null,
+            transcription_status: fileType === 'audio' ? 'pending' : 'not_applicable',
+            metadata: null,
+          };
+          indexExtractedFile(fileDoc).catch(() => {});
+        }
 
         extractedCount++;
       }

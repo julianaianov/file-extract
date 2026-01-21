@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getExtractedFile, updateTranscription, getPendingAudioFiles } from '@/lib/db';
+import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
 import fs from 'fs';
 
 export const runtime = 'nodejs';
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
 
       // Salvar transcrição no banco
       updateTranscription(fileId, transcription, 'completed');
+      // Atualizar no Elasticsearch
+      if (isSearchEnabled()) {
+        const updated = getExtractedFile(fileId);
+        if (updated) {
+          updateExtractedFileInIndex(updated).catch(() => {});
+        }
+      }
 
       return NextResponse.json({
         success: true,

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getExtractedFile, getExtractedFilesByUpload, getUpload, deleteUpload, deleteExtractedFile } from '@/lib/db';
+import { isSearchEnabled, removeExtractedFile, removeByUpload } from '@/lib/search';
 import fs from 'fs';
 import path from 'path';
 
@@ -183,6 +184,9 @@ export async function DELETE(
         try { fs.unlinkSync(file.file_path); } catch {}
       }
       deleteExtractedFile(numId);
+      if (isSearchEnabled()) {
+        removeExtractedFile(numId).catch(() => {});
+      }
       return NextResponse.json({ success: true, message: 'Arquivo deletado com sucesso' });
     }
 
@@ -205,6 +209,9 @@ export async function DELETE(
 
     // Deletar do banco (cascade deleta os arquivos extraídos)
     deleteUpload(numId);
+    if (isSearchEnabled()) {
+      removeByUpload(numId).catch(() => {});
+    }
 
     return NextResponse.json({ success: true, message: 'Upload deletado com sucesso' });
   } catch (error) {
