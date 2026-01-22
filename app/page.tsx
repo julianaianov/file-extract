@@ -6,6 +6,7 @@ import { FileUpload } from '@/components/file-upload';
 import { SearchFilters, type SearchFilters as SearchFiltersType } from '@/components/search-filters';
 import { FileList } from '@/components/file-list';
 import { StatsCards } from '@/components/stats-cards';
+import { ContextSearch } from '@/components/context-search';
 import { Archive } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -156,6 +157,9 @@ export default function Home() {
               }}
             />
           </section>
+
+          {/* Busca de Contexto de Conversa */}
+          <ContextSearch />
 
           {/* Lista de Arquivos */}
           <section className="space-y-4">
