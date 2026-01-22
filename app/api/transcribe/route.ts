@@ -3,7 +3,6 @@ import { getExtractedFile, updateTranscription, getPendingAudioFiles } from '@/l
 import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
 import fs from 'fs';
 import path from 'path';
-import { convertToWav, isSupportedAudioExt } from '@/lib/audio';
 
 export const runtime = 'nodejs';
 
@@ -38,20 +37,18 @@ export async function POST(request: Request) {
 
     try {
       // Ler o arquivo de áudio
-      let inputPath = file.file_path;
+      const originalBuffer = fs.readFileSync(file.file_path);
       const ext = path.extname(file.filename).replace('.', '').toLowerCase();
-      // Converter para WAV se extensão não for suportada pela API (ex.: opus)
-      if (!isSupportedAudioExt(file.filename) || ext === 'opus') {
-        inputPath = await convertToWav(file.file_path);
-      }
-      const audioBuffer = fs.readFileSync(inputPath);
-      const outName = isSupportedAudioExt(file.filename) && ext !== 'opus'
-        ? file.filename
-        : path.basename(file.filename, path.extname(file.filename)) + '.wav';
-      // Usar File (Node 18+) com mimetype condizente
-      const audioFile = new File([audioBuffer], outName, {
-        type: outName.endsWith('.wav') ? 'audio/wav' : (file.mime_type || 'audio/mpeg'),
-      });
+      // Workaround: Whisper aceita 'ogg' (Opus dentro do contêiner). Apenas renomeamos .opus -> .ogg.
+      const filenameForApi =
+        ext === 'opus'
+          ? path.basename(file.filename, path.extname(file.filename)) + '.ogg'
+          : file.filename;
+      const mimeForApi =
+        ext === 'opus' ? 'audio/ogg' : (file.mime_type || 'audio/mpeg');
+
+      // Usar File (Node 18+) com mimetype adequado
+      const audioFile = new File([originalBuffer], filenameForApi, { type: mimeForApi });
 
       // Criar FormData para enviar ao Whisper API
       const formData = new FormData();
