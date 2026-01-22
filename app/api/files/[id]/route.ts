@@ -92,6 +92,7 @@ export async function GET(
           type: 'image',
           mimeType,
           data: `data:${mimeType};base64,${base64}`,
+          ocrText: file.content_text || '',
         });
       }
 

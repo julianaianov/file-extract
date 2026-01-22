@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Loader2, FileText, Mic, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface ExtractedFile {
   id: number;
@@ -26,12 +27,14 @@ interface ContentData {
   transcription?: string;
   transcriptionStatus?: string;
   message?: string;
+  ocrText?: string;
 }
 
 export function FilePreview({ file, onClose }: FilePreviewProps) {
   const [content, setContent] = useState<ContentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -100,6 +103,39 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
             <div className="flex items-center gap-2 text-muted-foreground">
               <ImageIcon className="h-5 w-5" />
               <span>Visualizacao de Imagem</span>
+              <div className="ml-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isExtracting}
+                  onClick={async () => {
+                    try {
+                      setIsExtracting(true);
+                      const res = await fetch('/api/ocr', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileId: file.id }),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) {
+                        toast.error(data?.error || 'Falha ao extrair texto');
+                        return;
+                      }
+                      toast.success('Texto extraido com sucesso');
+                      // Recarregar o conteúdo para exibir o texto extraído
+                      const refresh = await fetch(`/api/files/${file.id}?action=content`);
+                      const freshData = await refresh.json();
+                      if (refresh.ok) setContent(freshData);
+                    } catch {
+                      toast.error('Erro de rede ao extrair texto');
+                    } finally {
+                      setIsExtracting(false);
+                    }
+                  }}
+                >
+                  {isExtracting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Extrair Texto'}
+                </Button>
+              </div>
             </div>
             <div className="flex justify-center">
               <img
@@ -108,6 +144,14 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
                 className="max-h-[60vh] max-w-full rounded-lg object-contain"
               />
             </div>
+            {content.ocrText && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Texto extraido (OCR):</p>
+                <div className="rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap">
+                  {content.ocrText}
+                </div>
+              </div>
+            )}
           </div>
         );
 

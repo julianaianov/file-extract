@@ -238,6 +238,16 @@ export function getExtractedFile(id: number): ExtractedFile | undefined {
   return stmt.get(id) as ExtractedFile | undefined;
 }
 
+export function updateContentText(id: number, contentText: string): void {
+  const db = getDb();
+  const stmt = db.prepare(`
+    UPDATE extracted_files
+    SET content_text = ?
+    WHERE id = ?
+  `);
+  stmt.run(contentText, id);
+}
+
 export function deleteExtractedFile(id: number): void {
   const db = getDb();
   const stmt = db.prepare('DELETE FROM extracted_files WHERE id = ?');

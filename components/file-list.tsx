@@ -5,6 +5,7 @@ import { FileText, Mic, ImageIcon, File, Download, Eye, Loader2, Trash2, CheckSq
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { FilePreview } from './file-preview';
+import { toast } from 'sonner';
 
 interface ExtractedFile {
   id: number;
@@ -217,6 +218,32 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
                 <Button size="sm" variant="ghost" onClick={() => deleteOne(file.id)} title="Excluir">
                   <Trash2 className="h-4 w-4" />
                 </Button>
+                {file.file_type === 'image' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/ocr', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ fileId: file.id }),
+                        });
+                        if (res.ok) {
+                          toast.success('Texto extraído com sucesso');
+                          onChanged?.();
+                        } else {
+                          const data = await res.json().catch(() => ({}));
+                          toast.error(data?.error || 'Falha ao extrair texto');
+                        }
+                      } catch (e) {
+                        toast.error('Erro de rede ao extrair texto');
+                      }
+                    }}
+                  >
+                    Extrair Texto
+                  </Button>
+                )}
                 {file.file_type === 'audio' &&
                   file.transcription_status === 'pending' &&
                   onTranscribe && (
