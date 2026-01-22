@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getExtractedFile, updateTranscription, getPendingAudioFiles } from '@/lib/db';
 import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
 import fs from 'fs';
+import path from 'path';
+import { convertToWav, isSupportedAudioExt } from '@/lib/audio';
 
 export const runtime = 'nodejs';
 
@@ -36,10 +38,19 @@ export async function POST(request: Request) {
 
     try {
       // Ler o arquivo de áudio
-      const audioBuffer = fs.readFileSync(file.file_path);
-      // Usar File (web standard em Node 18+) para manter o nome e o tipo
-      const audioFile = new File([audioBuffer], file.filename, {
-        type: file.mime_type || 'audio/mpeg',
+      let inputPath = file.file_path;
+      const ext = path.extname(file.filename).replace('.', '').toLowerCase();
+      // Converter para WAV se extensão não for suportada pela API (ex.: opus)
+      if (!isSupportedAudioExt(file.filename) || ext === 'opus') {
+        inputPath = await convertToWav(file.file_path);
+      }
+      const audioBuffer = fs.readFileSync(inputPath);
+      const outName = isSupportedAudioExt(file.filename) && ext !== 'opus'
+        ? file.filename
+        : path.basename(file.filename, path.extname(file.filename)) + '.wav';
+      // Usar File (Node 18+) com mimetype condizente
+      const audioFile = new File([audioBuffer], outName, {
+        type: outName.endsWith('.wav') ? 'audio/wav' : (file.mime_type || 'audio/mpeg'),
       });
 
       // Criar FormData para enviar ao Whisper API
