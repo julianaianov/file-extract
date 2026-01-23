@@ -61,6 +61,7 @@
     "swr": "2.3.8",
     "tesseract.js": "^5.1.0",
     "ffmpeg-static": "^5.2.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "13.0.0",
