@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT:-3000}
+      # Idiomas OCR (padrão português + inglês)
+      - OCR_LANG=${OCR_LANG:-por+eng}
+      # Se usar Elasticsearch, exporte ELASTICSEARCH_URL (e credenciais se necessário)
+      - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-}
+      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME:-}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
+      - ELASTICSEARCH_TLS_REJECT_UNAUTHORIZED=${ELASTICSEARCH_TLS_REJECT_UNAUTHORIZED:-}
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # Persistência de banco SQLite e arquivos extraídos
+      - ./data:/app/data
+    # Subir ES junto usando: docker compose --profile search up
+    depends_on:
+      - elasticsearch
+    profiles: ["", "search"]
+
+  # Serviço opcional de busca
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    profiles: ["search"]
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+volumes:
+  esdata:
+    driver: local
+
+
