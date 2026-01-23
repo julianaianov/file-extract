@@ -14,6 +14,7 @@ export interface SearchFilters {
   timeFrom: string;
   timeTo: string;
   uploadId?: number | null;
+  transcriptionStatus?: string | null;
 }
 
 interface SearchFiltersProps {
@@ -39,6 +40,7 @@ export function SearchFilters({ onSearch, isLoading, onDeleteUpload }: SearchFil
     timeFrom: '',
     timeTo: '',
     uploadId: null,
+    transcriptionStatus: null,
   });
   const [uploads, setUploads] = useState<Array<{ id: number; original_name: string }>>([]);
 
@@ -64,6 +66,7 @@ export function SearchFilters({ onSearch, isLoading, onDeleteUpload }: SearchFil
       timeFrom: '',
       timeTo: '',
       uploadId: null,
+      transcriptionStatus: null,
     };
     setFilters(cleared);
     onSearch(cleared);

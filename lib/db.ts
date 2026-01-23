@@ -272,6 +272,7 @@ export interface SearchFilters {
   timeFrom?: string;
   timeTo?: string;
   uploadId?: number;
+  transcriptionStatus?: ExtractedFile['transcription_status'];
 }
 
 export function searchFiles(filters: SearchFilters): ExtractedFile[] {
@@ -315,6 +316,10 @@ export function searchFiles(filters: SearchFilters): ExtractedFile[] {
   if (filters.uploadId) {
     conditions.push('ef.upload_id = ?');
     params.push(filters.uploadId);
+  }
+  if (filters.transcriptionStatus) {
+    conditions.push('ef.transcription_status = ?');
+    params.push(filters.transcriptionStatus);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -32,6 +32,14 @@ export async function GET(request: Request) {
       filters.fileType = fileType as SearchFilters['fileType'];
     }
 
+    const transcriptionStatus = searchParams.get('transcriptionStatus');
+    if (
+      transcriptionStatus &&
+      ['pending', 'processing', 'completed', 'error', 'not_applicable'].includes(transcriptionStatus)
+    ) {
+      (filters as any).transcriptionStatus = transcriptionStatus as any;
+    }
+
     const dateFrom = searchParams.get('dateFrom');
     if (dateFrom) filters.dateFrom = dateFrom;
 
