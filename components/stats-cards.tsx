@@ -13,9 +13,10 @@ interface Stats {
 
 interface StatsCardsProps {
   stats: Stats;
+  onCardClick?: (target: { type?: 'text' | 'audio' | 'image' | 'other'; transcriptionStatus?: string } | null) => void;
 }
 
-export function StatsCards({ stats }: StatsCardsProps) {
+export function StatsCards({ stats, onCardClick }: StatsCardsProps) {
   const cards = [
     {
       label: 'Total Uploads',
@@ -24,6 +25,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: 'text-blue-400',
       bg: 'bg-blue-500/10 border-blue-500/20',
       iconBg: 'bg-blue-500/20',
+      target: null,
     },
     {
       label: 'Arquivos de Texto',
@@ -32,6 +34,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: 'text-green-400',
       bg: 'bg-emerald-500/10 border-emerald-500/20',
       iconBg: 'bg-emerald-500/20',
+      target: { type: 'text' as const },
     },
     {
       label: 'Arquivos de Audio',
@@ -40,6 +43,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: 'text-yellow-400',
       bg: 'bg-amber-500/10 border-amber-500/20',
       iconBg: 'bg-amber-500/20',
+      target: { type: 'audio' as const },
     },
     {
       label: 'Imagens',
@@ -48,6 +52,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: 'text-pink-400',
       bg: 'bg-fuchsia-500/10 border-fuchsia-500/20',
       iconBg: 'bg-fuchsia-500/20',
+      target: { type: 'image' as const },
     },
     {
       label: 'Transcricoes Pendentes',
@@ -56,6 +61,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: 'text-orange-400',
       bg: 'bg-orange-500/10 border-orange-500/20',
       iconBg: 'bg-orange-500/20',
+      target: { transcriptionStatus: 'pending' },
     },
   ];
 
@@ -64,9 +70,10 @@ export function StatsCards({ stats }: StatsCardsProps) {
       {cards.map((card) => {
         const Icon = card.icon;
         return (
-          <div
+          <button
             key={card.label}
-            className={`flex items-center gap-4 rounded-lg border p-4 ${card.bg}`}
+            onClick={() => onCardClick?.(card.target)}
+            className={`flex items-center gap-4 rounded-lg border p-4 text-left transition ${card.bg} hover:brightness-110`}
           >
             <div className={`rounded-lg p-3 ${card.iconBg} ${card.color}`}>
               <Icon className="h-5 w-5" />
@@ -75,7 +82,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
               <p className="text-2xl font-bold text-foreground">{card.value}</p>
               <p className="text-sm text-muted-foreground">{card.label}</p>
             </div>
-          </div>
+          </button>
         );
       })}
     </div>

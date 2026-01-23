@@ -47,6 +47,7 @@ export default function Home() {
     timeFrom: '',
     timeTo: '',
     uploadId: null,
+    transcriptionStatus: null,
   });
   const [transcribingIds, setTranscribingIds] = useState<number[]>([]);
   const searchParams = useSearchParams();
@@ -56,6 +57,7 @@ export default function Home() {
     const params = new URLSearchParams();
     if (filters.keyword) params.set('keyword', filters.keyword);
     if (filters.fileType) params.set('fileType', filters.fileType);
+    if (filters.transcriptionStatus) params.set('transcriptionStatus', filters.transcriptionStatus);
     if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
     if (filters.dateTo) params.set('dateTo', filters.dateTo);
     if (filters.timeFrom) params.set('timeFrom', filters.timeFrom);
@@ -133,7 +135,31 @@ export default function Home() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="space-y-8">
           {/* Estatísticas */}
-          {statsData && <StatsCards stats={statsData} />}
+          {statsData && (
+            <StatsCards
+              stats={statsData}
+              onCardClick={(target) => {
+                if (!target) {
+                  setFilters({
+                    keyword: '',
+                    fileType: '',
+                    dateFrom: '',
+                    dateTo: '',
+                    timeFrom: '',
+                    timeTo: '',
+                    uploadId: null,
+                    transcriptionStatus: null,
+                  });
+                  return;
+                }
+                setFilters((prev) => ({
+                  ...prev,
+                  fileType: (target as any).type ?? '',
+                  transcriptionStatus: target.transcriptionStatus ?? null,
+                }));
+              }}
+            />
+          )}
 
           {/* Upload */}
           <section className="rounded-lg border border-border bg-card p-6">
