@@ -56,6 +56,7 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
   const [previewFile, setPreviewFile] = useState<ExtractedFile | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkTranscribing, setBulkTranscribing] = useState(false);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -107,6 +108,52 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
     onChanged?.();
   };
 
+  const transcribeMany = async (ids: number[]) => {
+    if (ids.length === 0) return;
+    setBulkTranscribing(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const id of ids) {
+        try {
+          const res = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileId: id }),
+          });
+          if (res.ok) ok++;
+          else fail++;
+        } catch {
+          fail++;
+        }
+        onChanged?.();
+      }
+      if (fail === 0) {
+        toast.success(`Transcrição concluída para ${ok} áudio(s).`);
+      } else {
+        toast.error(`Transcrição finalizada: ${ok} sucesso(s), ${fail} falha(s).`);
+      }
+    } finally {
+      setBulkTranscribing(false);
+    }
+  };
+
+  const transcribeAllAudiosChronologically = async () => {
+    const queue = files
+      .filter((f) => f.file_type === 'audio')
+      .sort((a, b) => new Date(a.extracted_date).getTime() - new Date(b.extracted_date).getTime())
+      .map((f) => f.id);
+    await transcribeMany(queue);
+  };
+
+  const transcribeSelectedAudios = async () => {
+    const queue = files
+      .filter((f) => selectedIds.includes(f.id) && f.file_type === 'audio')
+      .sort((a, b) => new Date(a.extracted_date).getTime() - new Date(b.extracted_date).getTime())
+      .map((f) => f.id);
+    await transcribeMany(queue);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -144,9 +191,29 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
           >
             {selectionMode ? 'Sair seleção' : 'Selecionar'}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={transcribeAllAudiosChronologically}
+            disabled={bulkTranscribing || transcribingIds.length > 0}
+            title="Transcrever todos os áudios em ordem cronológica"
+          >
+            {bulkTranscribing ? 'Transcrevendo...' : 'Transcrever todos (áudio)'}
+          </Button>
           {selectionMode && selectedIds.length > 0 && (
             <Button size="sm" variant="destructive" onClick={deleteSelected}>
               Excluir selecionados
+            </Button>
+          )}
+          {selectionMode && selectedIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={transcribeSelectedAudios}
+              disabled={bulkTranscribing || transcribingIds.length > 0}
+              title="Transcrever apenas os áudios selecionados"
+            >
+              Transcrever selecionados (áudio)
             </Button>
           )}
         </div>
@@ -245,7 +312,7 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
                   </Button>
                 )}
                 {file.file_type === 'audio' &&
-                  file.transcription_status === 'pending' &&
+                  (file.transcription_status === 'pending' || file.transcription_status === 'error') &&
                   onTranscribe && (
                     <Button
                       size="sm"
@@ -256,7 +323,7 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
                       {isTranscribing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        'Transcrever'
+                      file.transcription_status === 'error' ? 'Tentar novamente' : 'Transcrever'
                       )}
                     </Button>
                   )}
