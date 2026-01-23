@@ -45,6 +45,94 @@ export function ContextModal({ query, filename, result, onClose }: ContextModalP
     return [before, center, after].filter(Boolean).join('\n');
   }, [result]);
 
+  const palette = [
+    'text-emerald-400',
+    'text-sky-400',
+    'text-amber-400',
+    'text-fuchsia-400',
+    'text-rose-400',
+    'text-violet-400',
+    'text-lime-400',
+    'text-orange-400',
+  ];
+  const hash = (s: string) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  };
+
+  function findBestMatch(text: string, needle: string): { start: number; end: number } | null {
+    const tl = text.toLowerCase();
+    const nl = needle.toLowerCase();
+    const idx = tl.indexOf(nl);
+    if (idx !== -1) return { start: idx, end: idx + nl.length };
+    // fallback: pick closest token
+    const re = /\b[\p{L}\p{N}_]+\b/gu;
+    let m: RegExpExecArray | null;
+    let best: { d: number; s: number; e: number } | null = null;
+    while ((m = re.exec(tl))) {
+      const token = m[0];
+      const d = levenshtein(token, nl);
+      if (!best || d < best.d) best = { d, s: m.index, e: m.index + token.length };
+    }
+    if (best && best.d <= Math.max(1, Math.floor(Math.min(nl.length, 8) * 0.3))) {
+      return { start: best.s, end: best.e };
+    }
+    return null;
+  }
+
+  function levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      }
+    }
+    return dp[m][n];
+  }
+
+  function renderContentWithStyles(text: string, q: string) {
+    // date [dd/mm/yyyy, hh:mm:ss]
+    const dateMatch = text.match(/^\[(\d{2}\/\d{2}\/\d{4},\s*\d{2}:\d{2}:\d{2})\]\s*/);
+    let rest = text;
+    const parts: JSX.Element[] = [];
+    if (dateMatch) {
+      parts.push(<span key="date" className="text-sky-400">{`[${dateMatch[1]}] `}</span>);
+      rest = text.slice(dateMatch[0].length);
+    }
+    // user "Name:" at start
+    const userMatch = rest.match(/^([^:]{2,30}):\s*/);
+    if (userMatch) {
+      const user = userMatch[1].trim();
+      const color = palette[hash(user) % palette.length];
+      parts.push(
+        <span key="user" className={`${color} font-semibold`}>
+          {user}:{' '}
+        </span>
+      );
+      rest = rest.slice(userMatch[0].length);
+    }
+    // fuzzy highlight term
+    const range = q ? findBestMatch(rest, q) : null;
+    if (!range) {
+      parts.push(<span key="rest">{rest}</span>);
+    } else {
+      parts.push(
+        <span key="pre">{rest.slice(0, range.start)}</span>,
+        <span key="hl" className="bg-warning/30 px-1 rounded">
+          {rest.slice(range.start, range.end)}
+        </span>,
+        <span key="post">{rest.slice(range.end)}</span>
+      );
+    }
+    return parts;
+  }
+
   const renderLine = (l: Line, isMatch = false) => (
     <div
       key={l.num}
@@ -57,7 +145,7 @@ export function ContextModal({ query, filename, result, onClose }: ContextModalP
       </div>
       <div className={`text-sm break-words leading-6 ${isMatch ? 'text-foreground' : 'text-foreground/90'}`}>
         <pre className="whitespace-pre-wrap font-mono text-[13px]">
-          {isMatch ? highlight(l.text) : l.text}
+          {renderContentWithStyles(l.text, isMatch ? query : '')}
         </pre>
       </div>
     </div>
