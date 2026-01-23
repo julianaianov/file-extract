@@ -96,20 +96,36 @@ export function ContextSearch() {
             {data.totalMatches} ocorrência(s) em {data.file?.filename || 'conversa'}.
             {data.totalMatches > 0 && ' Clique para ver o contexto.'}
           </p>
-          <div className="divide-y divide-border rounded-md border border-border">
-            {data.results.map((r, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedIdx(i)}
-                className="w-full p-3 text-left hover:bg-secondary"
-                title="Ver contexto"
-              >
-                <div className="line-clamp-1 text-sm text-foreground">{r.match.text}</div>
-                <div className="text-xs text-muted-foreground">
-                  Linhas {r.before[0]?.num ?? r.match.num}–{(r.after.at(-1)?.num ?? r.match.num)}
-                </div>
-              </button>
-            ))}
+          <div className="grid gap-2">
+            {data.results.map((r, i) => {
+              const start = r.before[0]?.num ?? r.match.num;
+              const end = r.after.at(-1)?.num ?? r.match.num;
+              const snippetBefore = r.before.at(-1)?.text ?? '';
+              const snippetAfter = r.after[0]?.text ?? '';
+              return (
+                <button
+                  key={i}
+                  onClick={() => setSelectedIdx(i)}
+                  className="w-full rounded-md border border-border p-3 text-left hover:bg-secondary/60"
+                  title="Ver contexto"
+                >
+                  <div className="text-xs text-muted-foreground mb-1">
+                    Linhas {start}–{end}
+                  </div>
+                  <div className="space-y-1 font-mono text-[13px] leading-6">
+                    {snippetBefore && (
+                      <div className="text-foreground/80 line-clamp-1">… {snippetBefore}</div>
+                    )}
+                    <div className="bg-warning/20 text-foreground px-1 rounded line-clamp-1">
+                      {r.match.text}
+                    </div>
+                    {snippetAfter && (
+                      <div className="text-foreground/80 line-clamp-1">{snippetAfter} …</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
             {data.results.length === 0 && (
               <div className="p-3 text-sm text-muted-foreground">Nenhum resultado encontrado.</div>
             )}

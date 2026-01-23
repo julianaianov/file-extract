@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getExtractedFile, updateTranscription, getPendingAudioFiles } from '@/lib/db';
 import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
 import fs from 'fs';
+import path from 'path';
 
 export const runtime = 'nodejs';
 
@@ -36,11 +37,18 @@ export async function POST(request: Request) {
 
     try {
       // Ler o arquivo de áudio
-      const audioBuffer = fs.readFileSync(file.file_path);
-      // Usar File (web standard em Node 18+) para manter o nome e o tipo
-      const audioFile = new File([audioBuffer], file.filename, {
-        type: file.mime_type || 'audio/mpeg',
-      });
+      const originalBuffer = fs.readFileSync(file.file_path);
+      const ext = path.extname(file.filename).replace('.', '').toLowerCase();
+      // Workaround: Whisper aceita 'ogg' (Opus dentro do contêiner). Apenas renomeamos .opus -> .ogg.
+      const filenameForApi =
+        ext === 'opus'
+          ? path.basename(file.filename, path.extname(file.filename)) + '.ogg'
+          : file.filename;
+      const mimeForApi =
+        ext === 'opus' ? 'audio/ogg' : (file.mime_type || 'audio/mpeg');
+
+      // Usar File (Node 18+) com mimetype adequado
+      const audioFile = new File([originalBuffer], filenameForApi, { type: mimeForApi });
 
       // Criar FormData para enviar ao Whisper API
       const formData = new FormData();

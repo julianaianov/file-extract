@@ -138,6 +138,42 @@ export async function searchIdsByKeyword(keyword: string, fileType?: string): Pr
   return (hits.hits || []).map((h: any) => Number(h._id));
 }
 
+export async function searchIdsByFuzzyKeyword(
+  keyword: string,
+  fileType?: string,
+  limit: number = 50
+): Promise<number[]> {
+  const es = getClient();
+  if (!es) return [];
+  await ensureIndex();
+  const must: any[] = [];
+  if (keyword) {
+    must.push({
+      multi_match: {
+        query: keyword,
+        fields: ['content_text^2', 'transcription^2', 'filename'],
+        type: 'best_fields',
+        fuzziness: 'AUTO',
+        operator: 'or',
+      },
+    });
+  }
+  if (fileType) {
+    must.push({ term: { file_type: fileType } });
+  }
+  const { hits } = await es.search({
+    index: indexName,
+    size: limit,
+    query: must.length ? { bool: { must } } : { match_all: {} },
+    _source: false,
+    fields: ['id'],
+  });
+  return (hits.hits || []).map((h: any) => Number(h._id));
+}
+
+
+
+
 
 
 
