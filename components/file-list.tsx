@@ -37,12 +37,36 @@ const fileTypeIcons = {
   other: File,
 };
 
-const fileTypeColors = {
-  text: 'text-blue-400',
-  audio: 'text-green-400',
-  image: 'text-pink-400',
-  other: 'text-gray-400',
-};
+const fileTypeTheme = {
+  text: {
+    icon: 'text-blue-400',
+    iconBg: 'bg-blue-500/20',
+    cardBg: 'bg-blue-500/5',
+    border: 'border-blue-500/20',
+    ring: 'ring-blue-500/30',
+  },
+  audio: {
+    icon: 'text-amber-400',
+    iconBg: 'bg-amber-500/20',
+    cardBg: 'bg-amber-500/5',
+    border: 'border-amber-500/20',
+    ring: 'ring-amber-500/30',
+  },
+  image: {
+    icon: 'text-fuchsia-400',
+    iconBg: 'bg-fuchsia-500/20',
+    cardBg: 'bg-fuchsia-500/5',
+    border: 'border-fuchsia-500/20',
+    ring: 'ring-fuchsia-500/30',
+  },
+  other: {
+    icon: 'text-slate-400',
+    iconBg: 'bg-slate-500/20',
+    cardBg: 'bg-slate-500/5',
+    border: 'border-slate-500/20',
+    ring: 'ring-slate-500/30',
+  },
+} as const;
 
 const transcriptionStatusLabels = {
   pending: 'Pendente',
@@ -221,14 +245,20 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
       <div className="space-y-2">
         {files.map((file) => {
           const Icon = fileTypeIcons[file.file_type];
-          const colorClass = fileTypeColors[file.file_type];
+          const theme = fileTypeTheme[file.file_type];
           const isTranscribing = transcribingIds.includes(file.id);
           const isSelected = selectedIds.includes(file.id);
 
           return (
             <div
               key={file.id}
-              className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-secondary/50"
+              className={cn(
+                'group flex items-center gap-4 rounded-lg border p-4 transition hover:shadow-md',
+                theme.cardBg,
+                theme.border,
+                'hover:ring-2',
+                theme.ring
+              )}
             >
               {selectionMode && (
                 <button
@@ -239,7 +269,7 @@ export function FileList({ files, isLoading, onTranscribe, transcribingIds = [],
                   {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
                 </button>
               )}
-              <div className={cn('rounded-lg bg-secondary p-3', colorClass)}>
+              <div className={cn('rounded-lg p-3', theme.iconBg, theme.icon)}>
                 <Icon className="h-5 w-5" />
               </div>
 
