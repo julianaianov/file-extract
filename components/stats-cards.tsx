@@ -22,30 +22,40 @@ export function StatsCards({ stats }: StatsCardsProps) {
       value: stats.totalUploads,
       icon: Upload,
       color: 'text-blue-400',
+      bg: 'bg-blue-500/10 border-blue-500/20',
+      iconBg: 'bg-blue-500/20',
     },
     {
       label: 'Arquivos de Texto',
       value: stats.textFiles,
       icon: FileText,
       color: 'text-green-400',
+      bg: 'bg-emerald-500/10 border-emerald-500/20',
+      iconBg: 'bg-emerald-500/20',
     },
     {
       label: 'Arquivos de Audio',
       value: stats.audioFiles,
       icon: Mic,
       color: 'text-yellow-400',
+      bg: 'bg-amber-500/10 border-amber-500/20',
+      iconBg: 'bg-amber-500/20',
     },
     {
       label: 'Imagens',
       value: stats.imageFiles,
       icon: ImageIcon,
       color: 'text-pink-400',
+      bg: 'bg-fuchsia-500/10 border-fuchsia-500/20',
+      iconBg: 'bg-fuchsia-500/20',
     },
     {
       label: 'Transcricoes Pendentes',
       value: stats.pendingTranscriptions,
       icon: Clock,
       color: 'text-orange-400',
+      bg: 'bg-orange-500/10 border-orange-500/20',
+      iconBg: 'bg-orange-500/20',
     },
   ];
 
@@ -56,9 +66,9 @@ export function StatsCards({ stats }: StatsCardsProps) {
         return (
           <div
             key={card.label}
-            className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
+            className={`flex items-center gap-4 rounded-lg border p-4 ${card.bg}`}
           >
-            <div className={`rounded-lg bg-secondary p-3 ${card.color}`}>
+            <div className={`rounded-lg p-3 ${card.iconBg} ${card.color}`}>
               <Icon className="h-5 w-5" />
             </div>
             <div>
