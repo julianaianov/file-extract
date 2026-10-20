@@ -27,6 +27,23 @@ export async function GET(request: Request, context: Context) {
       return NextResponse.json(await getExtractedFilesByUpload(id));
     const file = await getExtractedFile(id);
     if (file) {
+      if (action === "stream") {
+        if (file.file_type !== "audio") return NextResponse.json({ error: "Arquivo sem audio" }, { status: 415 });
+        const buffer = await readStoredFile(file.file_path);
+        const headers: Record<string, string> = { "Content-Type": file.mime_type || "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "private, no-store" };
+        const range = request.headers.get("range");
+        if (range) {
+          const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+          let start = 0, end = buffer.length - 1;
+          if (match) {
+            if (match[1]) { start = Number(match[1]); if (match[2]) end = Math.min(Number(match[2]), end); }
+            else if (match[2]) start = Math.max(0, buffer.length - Number(match[2]));
+          }
+          if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= buffer.length || (!match[1] && Number(match[2]) === 0)) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": "bytes */" + buffer.length } });
+          return new Response(new Uint8Array(buffer.subarray(start, end + 1)), { status: 206, headers: { ...headers, "Content-Range": "bytes " + start + "-" + end + "/" + buffer.length, "Content-Length": String(end - start + 1) } });
+        }
+        return new Response(new Uint8Array(buffer), { headers: { ...headers, "Content-Length": String(buffer.length) } });
+      }
       if (action === "download") {
         const buffer = await readStoredFile(file.file_path);
         return new Response(new Uint8Array(buffer), {
@@ -65,7 +82,7 @@ export async function GET(request: Request, context: Context) {
       }
       return NextResponse.json(file);
     }
-    if (action === "download" || action === "content")
+    if (action === "download" || action === "content" || action === "stream")
       return NextResponse.json(
         { error: "Arquivo não encontrado" },
         { status: 404 },

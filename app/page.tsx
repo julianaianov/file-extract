@@ -23,6 +23,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
+import { FirstVisitGuide } from "@/components/first-visit-guide";
 import { FileUpload } from "@/components/file-upload";
 import {
   SearchFilters,
@@ -191,6 +192,7 @@ export default function Home() {
             <span className="text-foreground">Visão geral</span>
           </div>
           <div className="flex items-center gap-3">
+            <FirstVisitGuide />
             <span
               className={`connection-badge ${statsError ? "connection-error" : ""}`}
             >

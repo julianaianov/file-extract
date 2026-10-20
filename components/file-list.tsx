@@ -331,6 +331,7 @@ export function FileList({
                   )}
                 </div>
               </div>
+              {file.file_type === "audio" && <div className="library-audio"><audio controls preload="none" aria-label={"Reproduzir " + file.filename} src={"/api/files/" + file.id + "?action=stream"} onPlay={event => { document.querySelectorAll("audio").forEach(audio => { if (audio !== event.currentTarget) audio.pause(); }); }} /><a href={"/api/files/" + file.id + "?action=download"} className="text-xs text-cyan-300 underline">Baixar original</a></div>}
               {file.search_keyword && <SearchExcerpts contexts={file.search_context ?? []} keyword={file.search_keyword} />}
               <div className="file-card-bottom">
                 <span className="file-origin" title={file.upload_name}>

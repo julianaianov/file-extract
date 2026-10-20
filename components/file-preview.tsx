@@ -189,7 +189,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
               <Mic className="h-5 w-5" />
               <span>Reprodutor de Audio</span>
             </div>
-            <audio controls className="w-full" src={content.data}>
+            <audio controls preload="none" aria-label={"Reproduzir " + file.filename} className="w-full" src={"/api/files/" + file.id + "?action=stream"} onPlay={event => { document.querySelectorAll("audio").forEach(audio => { if (audio !== event.currentTarget) audio.pause(); }); }}>
               Seu navegador nao suporta o elemento de audio.
             </audio>
             {content.transcription && (
