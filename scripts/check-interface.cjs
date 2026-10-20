@@ -197,7 +197,11 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
         json: { success: true, uploadId: 1, totalFiles: 1 },
       });
     });
-    await input.setInputFiles("node_modules/pdf-parse/test/data/01-valid.pdf");
+    await input.setInputFiles({
+      name: "sample.pdf",
+      mimeType: "application/pdf",
+      buffer: require("./pdf-fixture.cjs").makePdf(),
+    });
     await page
       .getByRole("button", { name: "Extrair arquivo", exact: true })
       .click();

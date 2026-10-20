@@ -312,6 +312,11 @@ export function FileList({
                 >
                   {file.filename}
                 </button>
+                {file.metadata?.includes('"pdf_warning"') && (
+                  <span className="mt-1 block text-[10px] text-amber-300">
+                    Original salvo · texto indisponível
+                  </span>
+                )}
                 <div className="file-metadata">
                   <span>{formatSize(Number(file.file_size))}</span>
                   <span aria-hidden="true">·</span>

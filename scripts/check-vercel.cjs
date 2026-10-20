@@ -47,10 +47,11 @@ function request(route, extra = []) {
     const zip = new (require("adm-zip"))();
     zip.addFile("test.txt", Buffer.from("verificacao Vercel ZIP"));
     fs.writeFileSync(".vercel/check.zip", zip.toBuffer());
-    for (const file of [
-      "node_modules/pdf-parse/test/data/01-valid.pdf",
-      ".vercel/check.zip",
-    ]) {
+    fs.writeFileSync(
+      ".vercel/check.pdf",
+      require("./pdf-fixture.cjs").makePdf(),
+    );
+    for (const file of [".vercel/check.pdf", ".vercel/check.zip"]) {
       const result = request("/api/upload", ["--form", "file=@" + file]);
       assert.equal(result.success, true);
       ids.push(result.uploadId);
@@ -69,6 +70,7 @@ function request(route, extra = []) {
     for (const id of ids)
       await db.query("DELETE FROM public.uploads WHERE id=$1", [id]);
     await db.end();
+    if (fs.existsSync(".vercel/check.pdf")) fs.unlinkSync(".vercel/check.pdf");
     if (fs.existsSync(".vercel/check.zip")) fs.unlinkSync(".vercel/check.zip");
   }
 })().catch((e) => {

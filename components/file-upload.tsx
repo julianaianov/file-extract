@@ -27,9 +27,11 @@ export function FileUpload({ onUploadComplete }: Props) {
     >("idle"),
     [progress, setProgress] = useState(0),
     [message, setMessage] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
   const busy = phase === "uploading" || phase === "processing";
   const select = (candidate?: File) => {
     if (!candidate) return;
+    setWarnings([]);
     if (!/\.(zip|pdf)$/i.test(candidate.name)) {
       setFile(null);
       setMessage("Escolha um arquivo ZIP ou PDF.");
@@ -48,6 +50,7 @@ export function FileUpload({ onUploadComplete }: Props) {
     setName("");
   };
   const reset = () => {
+    setWarnings([]);
     setFile(null);
     setName("");
     setPhase("idle");
@@ -56,6 +59,7 @@ export function FileUpload({ onUploadComplete }: Props) {
   };
   const send = async () => {
     if (!file || busy) return;
+    setWarnings([]);
     setPhase("uploading");
     setProgress(0);
     setMessage("");
@@ -63,6 +67,7 @@ export function FileUpload({ onUploadComplete }: Props) {
       const result = await new Promise<{
         uploadId: number;
         totalFiles: number;
+        warnings?: string[];
       }>((resolve, reject) => {
         const xhr = new XMLHttpRequest(),
           body = new FormData();
@@ -106,12 +111,16 @@ export function FileUpload({ onUploadComplete }: Props) {
           );
         xhr.send(body);
       });
+      setWarnings(result.warnings || []);
       setPhase("success");
       setMessage(
-        result.totalFiles +
-          " arquivo" +
-          (result.totalFiles === 1 ? "" : "s") +
-          " na sua biblioteca.",
+        result.warnings?.length
+          ? result.totalFiles +
+              " arquivo(s) salvo(s). Confira os avisos abaixo."
+          : result.totalFiles +
+              " arquivo" +
+              (result.totalFiles === 1 ? "" : "s") +
+              " na sua biblioteca.",
       );
       setFile(null);
       setName("");
@@ -261,6 +270,24 @@ export function FileUpload({ onUploadComplete }: Props) {
         >
           {phase === "success" && <Check size={16} />}
           <span>{message}</span>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div
+          role="status"
+          className="mt-3 space-y-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-200"
+        >
+          {warnings.slice(0, 3).map((warning) => (
+            <p key={warning} className="break-words">
+              {warning}
+            </p>
+          ))}
+          {warnings.length > 3 && (
+            <p>
+              Mais {warnings.length - 3} avisos; consulte os arquivos na
+              biblioteca.
+            </p>
+          )}
         </div>
       )}
       <div className="upload-note">

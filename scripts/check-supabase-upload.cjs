@@ -27,9 +27,7 @@ const db = require("../lib/db.ts"),
   ids = [];
 (async () => {
   try {
-    const pdf = fs.readFileSync(
-        "node_modules/pdf-parse/test/data/01-valid.pdf",
-      ),
+    const pdf = require("./pdf-fixture.cjs").makePdf(),
       zip = new (require("adm-zip"))();
     zip.addFile("document.pdf", pdf);
     zip.addFile("note.txt", Buffer.from("verificacao supabase"));

@@ -189,3 +189,13 @@ export async function getStatistics() {
     pendingTranscriptions: number;
   };
 }
+
+export async function updateFileMetadata(
+  id: number,
+  metadata: Record<string, unknown>,
+) {
+  await query("UPDATE public.extracted_files SET metadata=$2 WHERE id=$1", [
+    id,
+    JSON.stringify(metadata),
+  ]);
+}

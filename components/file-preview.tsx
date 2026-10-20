@@ -33,6 +33,7 @@ interface ContentData {
   transcription?: string;
   transcriptionStatus?: string;
   message?: string;
+  warning?: string;
   ocrText?: string;
 }
 
@@ -98,7 +99,10 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
               <span>Conteudo de Texto</span>
             </div>
             <pre className="max-h-[60vh] overflow-auto rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap font-mono">
-              {content.content || "Arquivo vazio"}
+              {content.content ||
+                (content.warning
+                  ? "Texto indisponível para este documento."
+                  : "Arquivo vazio")}
             </pre>
           </div>
         );
@@ -224,6 +228,20 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
         <DialogDescription className="sr-only">
           Pré-visualização do arquivo selecionado
         </DialogDescription>
+        {content?.warning && (
+          <div
+            role="status"
+            className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200"
+          >
+            {content.warning}
+            <a
+              className="mt-2 block underline"
+              href={"/api/files/" + file.id + "?action=download"}
+            >
+              Baixar original
+            </a>
+          </div>
+        )}
         {renderContent()}
       </DialogContent>
     </Dialog>
