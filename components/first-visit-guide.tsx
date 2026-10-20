@@ -19,7 +19,7 @@ export function FirstVisitGuide() {
   return <>
     <button className="guide-launch" onClick={() => { setStep(0); setOpen(true); }} aria-label="Abrir tutorial"><CircleHelp size={16} /><span>Tutorial</span></button>
     <Dialog open={open} onOpenChange={value => { if (!value) close(); }}>
-      <DialogContent className="guide-dialog">
+      <DialogContent className="guide-dialog" overlayClassName="guide-overlay" style={{ backgroundColor: "#101722", backgroundImage: "none", color: "#eaf1fb", zIndex: 101 }}>
         <div className="guide-eyebrow">BEM-VINDO AO FILE EXTRACT</div>
         <div className="guide-progress" aria-label="Etapas do tutorial">{steps.map((item, index) => <button key={item.title} onClick={() => setStep(index)} aria-label={"Etapa " + (index + 1)} aria-current={step === index ? "step" : undefined} className={index <= step ? "active" : ""}>{index < step ? <Check size={14} /> : index + 1}</button>)}</div>
         <div className="guide-body" key={step}>

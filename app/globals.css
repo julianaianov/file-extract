@@ -120,3 +120,7 @@
 @keyframes guide-appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 480px) { .guide-launch span { display: none; } .guide-dialog { padding: 20px; } .guide-footer button { font-size: 12px; padding-left: 10px; padding-right: 10px; } }
 @media (prefers-reduced-motion: reduce) { .guide-body { animation: none; } }
+
+[data-slot="dialog-overlay"].guide-overlay { background-color: rgba(2, 6, 14, 0.9); backdrop-filter: blur(6px); z-index: 100; }
+[data-slot="dialog-content"].guide-dialog { background: #101722; border-color: #456276; box-shadow: 0 28px 100px #000b; }
+.guide-dialog .guide-demo { background: #0b1320; }
