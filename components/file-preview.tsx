@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Loader2, FileText, Mic, ImageIcon } from "lucide-react";
+import { highlight } from "./search-excerpts";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 
 interface ExtractedFile {
+  search_keyword?: string;
   id: number;
   filename: string;
   file_type: "text" | "audio" | "image" | "other";
@@ -38,10 +40,17 @@ interface ContentData {
 }
 
 export function FilePreview({ file, onClose }: FilePreviewProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState<ContentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  useEffect(() => {
+    if (!file.search_keyword) return;
+    const timer = setTimeout(() => contentRef.current?.querySelector("mark")?.scrollIntoView({ block: "center" }), 100);
+    return () => clearTimeout(timer);
+  }, [file.search_keyword, content]);
+
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -99,10 +108,10 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
               <span>Conteudo de Texto</span>
             </div>
             <pre className="max-h-[60vh] overflow-auto rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap font-mono">
-              {content.content ||
+              {highlight(content.content ||
                 (content.warning
                   ? "Texto indisponível para este documento."
-                  : "Arquivo vazio")}
+                  : "Arquivo vazio"), file.search_keyword || "")}
             </pre>
           </div>
         );
@@ -166,7 +175,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
                   Texto extraido (OCR):
                 </p>
                 <div className="rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap">
-                  {content.ocrText}
+                  {highlight(content.ocrText, file.search_keyword || "")}
                 </div>
               </div>
             )}
@@ -189,7 +198,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
                   Transcricao:
                 </p>
                 <div className="rounded-lg bg-secondary p-4 text-sm text-foreground">
-                  {content.transcription}
+                  {highlight(content.transcription, file.search_keyword || "")}
                 </div>
               </div>
             )}
@@ -242,7 +251,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
             </a>
           </div>
         )}
-        {renderContent()}
+        <div ref={contentRef} className="min-w-0 [overflow-wrap:anywhere]">{renderContent()}</div>
       </DialogContent>
     </Dialog>
   );

@@ -94,3 +94,7 @@
     @apply bg-background text-foreground;
   }
 }
+
+.search-excerpts { display: grid; gap: 0.75rem; min-width: 0; max-height: 26rem; overflow: auto; margin: 0.75rem 0; }
+.list-view .file-card:has(.search-excerpts) { flex-wrap: wrap; }
+.list-view .file-card .search-excerpts { width: 100%; flex-basis: 100%; grid-column: 1 / -1; }

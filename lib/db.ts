@@ -1,4 +1,5 @@
 import { query } from "./postgres";
+import { searchContext, type SearchContext } from "./search-context";
 export interface Upload {
   id: number;
   filename: string;
@@ -10,6 +11,8 @@ export interface Upload {
   error_message: string | null;
 }
 export interface ExtractedFile {
+  search_context?: SearchContext[];
+  search_keyword?: string;
   id: number;
   upload_id: number;
   filename: string;
@@ -160,10 +163,10 @@ export async function searchFiles(
   if (f.dateTo) add("ef.extracted_date::date <= ?::date", f.dateTo);
   if (f.timeFrom) add("ef.extracted_date::time >= ?::time", f.timeFrom);
   if (f.timeTo) add("ef.extracted_date::time <= ?::time", f.timeTo);
-  const selection = summary
+  const selection = summary && !f.keyword
     ? "ef.id,ef.upload_id,ef.filename,ef.file_path,ef.file_type,ef.file_size,ef.mime_type,ef.extracted_date,NULL::text AS content_text,LEFT(ef.transcription,240) AS transcription,ef.transcription_status,ef.metadata"
     : "ef.*";
-  return (
+  const rows: ExtractedFile[] = (
     await query(
       "SELECT " +
         selection +
@@ -173,6 +176,8 @@ export async function searchFiles(
       values,
     )
   ).rows;
+  if (!summary || !f.keyword) return rows;
+  return rows.map(file => ({ ...file, search_keyword: f.keyword, search_context: [...searchContext(file.content_text, f.keyword!, "content"), ...searchContext(file.transcription, f.keyword!, "transcription")], content_text: null, transcription: file.transcription?.slice(0, 240) ?? null }));
 }
 export async function getStatistics() {
   const row = (

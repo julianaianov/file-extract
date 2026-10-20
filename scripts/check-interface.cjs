@@ -129,13 +129,13 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
             f.filename.toLowerCase().includes(keyword.toLowerCase())) &&
           (!type || f.file_type === type),
       );
-      await route.fulfill({ json: { files, total: files.length } });
+      await route.fulfill({ json: { files: files.map(f => keyword ? { ...f, search_keyword: keyword, search_context: [{ source: "content", lines: [{number: 1, text: "Linha anterior 2", match: false}, {number: 2, text: "Linha anterior 1", match: false}, {number: 3, text: "Encontrado " + keyword, match: true}, {number: 4, text: "Linha posterior 1", match: false}, {number: 5, text: "Linha posterior 2", match: false}] }] } : f), total: files.length } });
     });
     await page.route("**/api/files/*", (route) =>
       route.fulfill({
         json: {
           type: "text",
-          content: "Conteúdo completo para verificar a pré-visualização.",
+          content: "Conteúdo completo para verificar a pré-visualização. Documento 25 encontrado.",
         },
       }),
     );
@@ -159,6 +159,15 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
       .fill("Documento 25");
     await expect(page.locator(".file-card")).toHaveCount(1, { timeout: 10000 });
     expect(queries.filter((q) => q === "Documento 25").length).toBe(1);
+    await expect(page.locator(".search-excerpts mark")).toHaveText("Documento 25");
+    await page.getByRole("button", { name: "Abrir Documento 25.pdf", exact: true }).click();
+    await expect(page.getByRole("dialog").locator("mark")).toHaveText("Documento 25");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".search-excerpts")).toContainText("Linha anterior 2");
+    await expect(page.locator(".search-excerpts")).toContainText("Linha posterior 2");
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1050 });
     await page
       .getByRole("button", { name: "Limpar filtros", exact: true })
       .click();

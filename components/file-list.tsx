@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { SearchExcerpts } from "./search-excerpts";
 import dynamic from "next/dynamic";
 import {
   Archive,
@@ -330,6 +331,7 @@ export function FileList({
                   )}
                 </div>
               </div>
+              {file.search_keyword && <SearchExcerpts contexts={file.search_context ?? []} keyword={file.search_keyword} />}
               <div className="file-card-bottom">
                 <span className="file-origin" title={file.upload_name}>
                   {file.upload_name || "Seu workspace"}
