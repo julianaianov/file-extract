@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { getExtractedFile, updateContentText } from '@/lib/db';
 import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
 import { extractTextFromImage } from '@/lib/ocr';
-import fs from 'fs';
+import { readStoredFile } from '@/lib/storage';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -12,22 +13,20 @@ export async function POST(request: Request) {
     if (!fileId) {
       return NextResponse.json({ error: 'ID do arquivo é obrigatório' }, { status: 400 });
     }
-    const file = getExtractedFile(fileId);
+    const file = await getExtractedFile(fileId);
     if (!file) {
       return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 404 });
     }
     if (file.file_type !== 'image') {
       return NextResponse.json({ error: 'Apenas imagens podem ser processadas' }, { status: 400 });
     }
-    if (!fs.existsSync(file.file_path)) {
-      return NextResponse.json({ error: 'Arquivo físico não encontrado' }, { status: 404 });
-    }
 
-    const text = await extractTextFromImage(file.file_path);
-    updateContentText(fileId, text);
+
+    const text = await extractTextFromImage(await readStoredFile(file.file_path));
+    await updateContentText(fileId, text);
 
     if (isSearchEnabled()) {
-      const updated = getExtractedFile(fileId);
+      const updated = await getExtractedFile(fileId);
       if (updated) await updateExtractedFileInIndex(updated);
     }
 

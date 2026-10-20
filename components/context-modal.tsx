@@ -100,7 +100,7 @@ export function ContextModal({ query, filename, result, onClose }: ContextModalP
     // date [dd/mm/yyyy, hh:mm:ss]
     const dateMatch = text.match(/^\[(\d{2}\/\d{2}\/\d{4},\s*\d{2}:\d{2}:\d{2})\]\s*/);
     let rest = text;
-    const parts: JSX.Element[] = [];
+    const parts: import("react").ReactElement[] = [];
     if (dateMatch) {
       parts.push(<span key="date" className="text-sky-400">{`[${dateMatch[1]}] `}</span>);
       rest = text.slice(dateMatch[0].length);

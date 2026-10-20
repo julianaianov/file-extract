@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
-import { isSearchEnabled, searchIdsByFuzzyKeyword } from '@/lib/search';
+import { searchFiles } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -78,60 +77,7 @@ export async function GET(request: Request) {
     const windowSize = Math.max(0, Math.min(20, parseInt(searchParams.get('window') || '5', 10) || 5));
     const maxResults = Math.max(1, Math.min(100, parseInt(searchParams.get('max') || '20', 10) || 20));
 
-    const db = getDb();
-    const files: Array<{ id: number; filename: string; content_text: string | null; upload_id: number }> = [];
-    if (isSearchEnabled()) {
-      const ids = await searchIdsByFuzzyKeyword(q, 'text', 20);
-      for (const id of ids) {
-        const f = db
-          .prepare(
-            `SELECT id, filename, content_text, upload_id
-             FROM extracted_files WHERE id = ? AND file_type = 'text'`
-          )
-          .get(id) as any;
-        if (f && f.content_text) files.push(f);
-        if (uploadIdStr && f?.upload_id !== Number(uploadIdStr)) continue;
-        if (files.length >= 5) break;
-      }
-    }
-    if (files.length === 0) {
-      // fallback: último arquivo de texto (como antes)
-      let file:
-        | {
-            id: number;
-            filename: string;
-            content_text: string | null;
-            upload_id: number;
-          }
-        | undefined;
-      if (uploadIdStr) {
-        const uploadId = parseInt(uploadIdStr, 10);
-        file = db
-          .prepare(
-            `
-            SELECT id, filename, content_text, upload_id
-            FROM extracted_files
-            WHERE file_type = 'text' AND upload_id = ?
-            ORDER BY (CASE WHEN filename LIKE '%_chat%' THEN 0 ELSE 1 END), extracted_date DESC
-            LIMIT 1
-          `
-          )
-          .get(uploadId) as any;
-      } else {
-        file = db
-          .prepare(
-            `
-            SELECT id, filename, content_text, upload_id
-            FROM extracted_files
-            WHERE file_type = 'text'
-            ORDER BY (CASE WHEN filename LIKE '%_chat%' THEN 0 ELSE 1 END), extracted_date DESC
-            LIMIT 1
-          `
-          )
-          .get() as any;
-      }
-      if (file && file.content_text) files.push(file);
-    }
+    const files = (await searchFiles({fileType:'text',uploadId:uploadIdStr?Number(uploadIdStr):undefined})).filter(f=>f.content_text).slice(0,20);
 
     if (files.length === 0) {
       return NextResponse.json({ results: [], totalMatches: 0, file: null });

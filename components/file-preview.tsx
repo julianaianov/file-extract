@@ -1,14 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { X, Loader2, FileText, Mic, ImageIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import { X, Loader2, FileText, Mic, ImageIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface ExtractedFile {
   id: number;
   filename: string;
-  file_type: 'text' | 'audio' | 'image' | 'other';
+  file_type: "text" | "audio" | "image" | "other";
   mime_type: string | null;
   transcription: string | null;
   transcription_status: string;
@@ -46,10 +52,10 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
         if (response.ok) {
           setContent(data);
         } else {
-          setError(data.error || 'Erro ao carregar conteudo');
+          setError(data.error || "Erro ao carregar conteudo");
         }
       } catch {
-        setError('Erro de conexao');
+        setError("Erro de conexao");
       } finally {
         setIsLoading(false);
       }
@@ -84,7 +90,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
     }
 
     switch (content.type) {
-      case 'text':
+      case "text":
         return (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -92,12 +98,12 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
               <span>Conteudo de Texto</span>
             </div>
             <pre className="max-h-[60vh] overflow-auto rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap font-mono">
-              {content.content || 'Arquivo vazio'}
+              {content.content || "Arquivo vazio"}
             </pre>
           </div>
         );
 
-      case 'image':
+      case "image":
         return (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -111,29 +117,35 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
                   onClick={async () => {
                     try {
                       setIsExtracting(true);
-                      const res = await fetch('/api/ocr', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                      const res = await fetch("/api/ocr", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ fileId: file.id }),
                       });
                       const data = await res.json().catch(() => ({}));
                       if (!res.ok) {
-                        toast.error(data?.error || 'Falha ao extrair texto');
+                        toast.error(data?.error || "Falha ao extrair texto");
                         return;
                       }
-                      toast.success('Texto extraido com sucesso');
+                      toast.success("Texto extraido com sucesso");
                       // Recarregar o conteúdo para exibir o texto extraído
-                      const refresh = await fetch(`/api/files/${file.id}?action=content`);
+                      const refresh = await fetch(
+                        `/api/files/${file.id}?action=content`,
+                      );
                       const freshData = await refresh.json();
                       if (refresh.ok) setContent(freshData);
                     } catch {
-                      toast.error('Erro de rede ao extrair texto');
+                      toast.error("Erro de rede ao extrair texto");
                     } finally {
                       setIsExtracting(false);
                     }
                   }}
                 >
-                  {isExtracting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Extrair Texto'}
+                  {isExtracting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Extrair Texto"
+                  )}
                 </Button>
               </div>
             </div>
@@ -146,7 +158,9 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
             </div>
             {content.ocrText && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Texto extraido (OCR):</p>
+                <p className="text-sm font-medium text-foreground">
+                  Texto extraido (OCR):
+                </p>
                 <div className="rounded-lg bg-secondary p-4 text-sm text-foreground whitespace-pre-wrap">
                   {content.ocrText}
                 </div>
@@ -155,7 +169,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
           </div>
         );
 
-      case 'audio':
+      case "audio":
         return (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -167,15 +181,18 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
             </audio>
             {content.transcription && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Transcricao:</p>
+                <p className="text-sm font-medium text-foreground">
+                  Transcricao:
+                </p>
                 <div className="rounded-lg bg-secondary p-4 text-sm text-foreground">
                   {content.transcription}
                 </div>
               </div>
             )}
-            {content.transcriptionStatus === 'pending' && (
+            {content.transcriptionStatus === "pending" && (
               <p className="text-sm text-muted-foreground italic">
-                Transcricao pendente. Clique em Transcrever na lista de arquivos.
+                Transcricao pendente. Clique em Transcrever na lista de
+                arquivos.
               </p>
             )}
           </div>
@@ -184,23 +201,31 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
       default:
         return (
           <div className="flex h-64 items-center justify-center text-muted-foreground">
-            <p>{content.message || 'Visualizacao nao disponivel para este tipo de arquivo'}</p>
+            <p>
+              {content.message ||
+                "Visualizacao nao disponivel para este tipo de arquivo"}
+            </p>
           </div>
         );
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-auto rounded-lg border border-border bg-card p-6 shadow-lg mx-4">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-foreground">{file.filename}</h3>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-auto border-border bg-card sm:max-w-4xl">
+        <DialogTitle className="truncate pr-7 text-base">
+          {file.filename}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Pré-visualização do arquivo selecionado
+        </DialogDescription>
         {renderContent()}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

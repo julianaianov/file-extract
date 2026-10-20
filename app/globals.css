@@ -1,29 +1,30 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./workspace.css";
 
 @custom-variant dark (&:is(.dark *));
 
 /* Dark theme inspired by Vercel Dashboard */
 :root {
-  --background: oklch(0.09 0 0);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.12 0 0);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.14 0 0);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.95 0 0);
-  --primary-foreground: oklch(0.09 0 0);
-  --secondary: oklch(0.18 0 0);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.18 0 0);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.55 0.15 250);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(0.22 0 0);
-  --input: oklch(0.18 0 0);
-  --ring: oklch(0.55 0.15 250);
+  --background: #090d16;
+  --foreground: #eaf1fb;
+  --card: #101722;
+  --card-foreground: #eaf1fb;
+  --popover: #131e2e;
+  --popover-foreground: #eaf1fb;
+  --primary: #b4fa63;
+  --primary-foreground: #14200c;
+  --secondary: #1a2739;
+  --secondary-foreground: #d8e5f5;
+  --muted: #192638;
+  --muted-foreground: #8ea2bd;
+  --accent: #54def4;
+  --accent-foreground: #10222e;
+  --destructive: #ef7389;
+  --destructive-foreground: #fff;
+  --border: #29384d;
+  --input: #1b293c;
+  --ring: #54def4;
   --chart-1: oklch(0.55 0.15 250);
   --chart-2: oklch(0.65 0.18 160);
   --chart-3: oklch(0.75 0.15 80);
@@ -38,13 +39,13 @@
   --sidebar-accent-foreground: oklch(0.95 0 0);
   --sidebar-border: oklch(0.22 0 0);
   --sidebar-ring: oklch(0.55 0.15 250);
-  --success: oklch(0.65 0.18 145);
-  --warning: oklch(0.75 0.15 80);
+  --success: #b4fa63;
+  --warning: #f6bd69;
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

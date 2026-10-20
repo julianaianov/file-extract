@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (!id || Number.isNaN(id)) {
     return NextResponse.json({ error: 'id inválido' }, { status: 400 });
   }
-  const file = getExtractedFile(id);
+  const file = await getExtractedFile(id);
   return NextResponse.json({ file });
 }
 

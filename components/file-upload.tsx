@@ -1,197 +1,274 @@
-'use client';
+"use client";
 
-import React from "react"
-
-import { useState, useCallback } from 'react';
-import { Upload, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-
-interface FileUploadProps {
+import { useRef, useState } from "react";
+import {
+  ArrowUpRight,
+  Check,
+  CloudUpload,
+  FileText,
+  Archive,
+  Loader2,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+interface Props {
   onUploadComplete?: (result: { uploadId: number; totalFiles: number }) => void;
 }
-
-export function FileUpload({ onUploadComplete }: FileUploadProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [message, setMessage] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [customName, setCustomName] = useState('');
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0].name.endsWith('.zip')) {
-      setSelectedFile(files[0]);
-      setUploadStatus('idle');
-      setMessage('');
-    } else {
-      setMessage('Por favor, selecione um arquivo ZIP');
-      setUploadStatus('error');
+const maxBytes = 4 * 1024 * 1024;
+export function FileUpload({ onUploadComplete }: Props) {
+  const input = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null),
+    [name, setName] = useState(""),
+    [dragging, setDragging] = useState(false);
+  const [phase, setPhase] = useState<
+      "idle" | "uploading" | "processing" | "success" | "error"
+    >("idle"),
+    [progress, setProgress] = useState(0),
+    [message, setMessage] = useState("");
+  const busy = phase === "uploading" || phase === "processing";
+  const select = (candidate?: File) => {
+    if (!candidate) return;
+    if (!/\.(zip|pdf)$/i.test(candidate.name)) {
+      setFile(null);
+      setMessage("Escolha um arquivo ZIP ou PDF.");
+      setPhase("error");
+      return;
     }
-  }, []);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      if (files[0].name.endsWith('.zip')) {
-        setSelectedFile(files[0]);
-        setUploadStatus('idle');
-        setMessage('');
-      } else {
-        setMessage('Por favor, selecione um arquivo ZIP');
-        setUploadStatus('error');
-      }
+    if (!candidate.size || candidate.size > maxBytes) {
+      setFile(null);
+      setMessage("Escolha um arquivo de até 4 MB.");
+      setPhase("error");
+      return;
     }
-  }, []);
-
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-
-    setIsUploading(true);
-    setUploadStatus('idle');
-    setMessage('');
-
+    setFile(candidate);
+    setMessage("");
+    setPhase("idle");
+    setName("");
+  };
+  const reset = () => {
+    setFile(null);
+    setName("");
+    setPhase("idle");
+    setMessage("");
+    if (input.current) input.current.value = "";
+  };
+  const send = async () => {
+    if (!file || busy) return;
+    setPhase("uploading");
+    setProgress(0);
+    setMessage("");
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      if (customName.trim()) {
-        formData.append('customName', customName.trim());
-      }
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      const result = await new Promise<{
+        uploadId: number;
+        totalFiles: number;
+      }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest(),
+          body = new FormData();
+        body.append("file", file);
+        if (name.trim()) body.append("customName", name.trim());
+        xhr.open("POST", "/api/upload");
+        xhr.timeout = 65000;
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            setProgress(percent);
+            if (percent === 100) setPhase("processing");
+          }
+        };
+        xhr.onload = () => {
+          let data;
+          try {
+            data = JSON.parse(xhr.responseText);
+          } catch {
+            reject(
+              new Error(
+                xhr.status === 413
+                  ? "O arquivo excede o limite de envio. Use um arquivo de até 4 MB."
+                  : "Não foi possível processar o arquivo. Tente novamente.",
+              ),
+            );
+            return;
+          }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+          else reject(new Error(data.error || "Falha ao processar o arquivo."));
+        };
+        xhr.onerror = () =>
+          reject(
+            new Error("Sem conexão. Confira sua internet e tente novamente."),
+          );
+        xhr.ontimeout = () =>
+          reject(
+            new Error(
+              "O processamento demorou demais. Tente um arquivo menor.",
+            ),
+          );
+        xhr.send(body);
       });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setUploadStatus('success');
-        setMessage(`Processado com sucesso! ${result.totalFiles} arquivos extraídos.`);
-        setSelectedFile(null);
-        onUploadComplete?.({ uploadId: result.uploadId, totalFiles: result.totalFiles });
-      } else {
-        setUploadStatus('error');
-        setMessage(result.error || 'Erro ao fazer upload');
-      }
-    } catch {
-      setUploadStatus('error');
-      setMessage('Erro de conexão. Tente novamente.');
-    } finally {
-      setIsUploading(false);
+      setPhase("success");
+      setMessage(
+        result.totalFiles +
+          " arquivo" +
+          (result.totalFiles === 1 ? "" : "s") +
+          " na sua biblioteca.",
+      );
+      setFile(null);
+      setName("");
+      if (input.current) input.current.value = "";
+      onUploadComplete?.(result);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Não foi possível enviar.");
+      setPhase("error");
     }
   };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   return (
-    <div className="w-full">
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={cn(
-          'relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-all',
-          isDragging
-            ? 'border-accent bg-accent/10'
-            : 'border-border bg-card hover:border-muted-foreground/50',
-          isUploading && 'pointer-events-none opacity-60'
-        )}
+    <div className="upload-widget">
+      <label
+        className={`dropzone ${dragging ? "dragging" : ""} ${busy ? "processing" : ""} ${phase === "success" ? "completed" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!busy) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (!busy) select(e.dataTransfer.files[0]);
+        }}
       >
         <input
+          ref={input}
           type="file"
-          accept=".zip"
-          onChange={handleFileSelect}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          disabled={isUploading}
+          accept=".zip,.pdf"
+          className="sr-only"
+          aria-label="Selecionar arquivo ZIP ou PDF"
+          disabled={busy}
+          onChange={(e) => select(e.target.files?.[0])}
         />
-
-        <div className="flex flex-col items-center gap-4 text-center">
-          {isUploading ? (
-            <Loader2 className="h-12 w-12 animate-spin text-accent" />
-          ) : uploadStatus === 'success' ? (
-            <CheckCircle2 className="h-12 w-12 text-success" />
-          ) : uploadStatus === 'error' ? (
-            <XCircle className="h-12 w-12 text-destructive" />
+        <div className="dropzone-grid" aria-hidden="true" />
+        <span className="upload-symbol">
+          {busy ? (
+            <Loader2 className="animate-spin" size={31} />
+          ) : phase === "success" ? (
+            <Check size={31} />
+          ) : file ? (
+            file.name.toLowerCase().endsWith(".pdf") ? (
+              <FileText size={31} />
+            ) : (
+              <Archive size={31} />
+            )
           ) : (
-            <Upload className="h-12 w-12 text-muted-foreground" />
+            <CloudUpload size={33} />
           )}
-
-          <div className="space-y-1">
-            <p className="text-base font-medium text-foreground">
-              {isUploading
-                ? 'Processando arquivo...'
-                : selectedFile
-                  ? selectedFile.name
-                  : 'Arraste um arquivo ZIP aqui'}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {isUploading
-                ? 'Por favor, aguarde'
-                : selectedFile
-                  ? formatFileSize(selectedFile.size)
-                  : 'ou clique para selecionar'}
-            </p>
+        </span>
+        <strong>
+          {busy
+            ? phase === "processing"
+              ? "Extraindo possibilidades..."
+              : "Enviando seu arquivo..."
+            : file
+              ? file.name
+              : dragging
+                ? "Solte aqui. A gente cuida do resto."
+                : "Arraste seu próximo projeto para cá"}
+        </strong>
+        <span className="dropzone-subtitle">
+          {busy ? (
+            "Seu conteúdo está a caminho da biblioteca."
+          ) : file ? (
+            (file.size / 1024 / 1024).toFixed(2) + " MB · pronto para extrair"
+          ) : (
+            <>
+              ou{" "}
+              <span className="text-cyan-300 underline underline-offset-4">
+                escolha um arquivo
+              </span>{" "}
+              no seu dispositivo
+            </>
+          )}
+        </span>
+        {!busy && !file && (
+          <div className="format-tags">
+            <span>
+              <Archive size={12} /> ZIP
+            </span>
+            <span>
+              <FileText size={12} /> PDF
+            </span>
+            <span className="format-limit">até 4 MB</span>
           </div>
-        </div>
-      </div>
-
-      {message && (
-        <p
-          className={cn(
-            'mt-3 text-sm',
-            uploadStatus === 'success' ? 'text-success' : 'text-destructive'
-          )}
-        >
-          {message}
-        </p>
-      )}
-
-      {selectedFile && !isUploading && (
-        <div className="mt-4 flex flex-col gap-3">
-          <input
-            type="text"
-            placeholder="Nome do upload (opcional)"
-            value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
-            className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-          />
-          <div className="flex gap-3">
-            <Button onClick={handleUpload} className="flex-1">
-            Processar Arquivo
+        )}
+        {busy && (
+          <div className="upload-progress" role="status" aria-live="polite">
+            <div className="progress-label">
+              <span>
+                {phase === "processing"
+                  ? "Processando conteúdo"
+                  : "Transferindo arquivo"}
+              </span>
+              <span>
+                {phase === "processing" ? (
+                  <Sparkles size={13} />
+                ) : (
+                  progress + "%"
+                )}
+              </span>
+            </div>
+            <div
+              className={
+                "progress-track " +
+                (phase === "processing" ? "indeterminate" : "")
+              }
+            >
+              <span style={{ width: progress + "%" }} />
+            </div>
+          </div>
+        )}
+      </label>
+      {file && !busy && (
+        <div className="selected-upload">
+          <label className="upload-name">
+            Como quer chamar este upload?
+            <input
+              placeholder={file.name}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={150}
+            />
+          </label>
+          <div className="flex items-center gap-2">
+            <Button onClick={send} className="upload-submit">
+              Extrair arquivo <ArrowUpRight size={17} />
             </Button>
             <Button
-              variant="outline"
-              onClick={() => {
-                setSelectedFile(null);
-                setMessage('');
-                setUploadStatus('idle');
-                setCustomName('');
-              }}
+              variant="ghost"
+              size="icon"
+              onClick={reset}
+              aria-label="Remover arquivo selecionado"
             >
-              Cancelar
+              <X size={18} />
             </Button>
           </div>
         </div>
       )}
+      {message && (
+        <div
+          role={phase === "error" ? "alert" : "status"}
+          className={
+            "upload-feedback " + (phase === "error" ? "error" : "success")
+          }
+        >
+          {phase === "success" && <Check size={16} />}
+          <span>{message}</span>
+        </div>
+      )}
+      <div className="upload-note">
+        <ShieldCheck size={13} />
+        <span>
+          ZIPs organizados. PDFs com texto pesquisável. Tudo em um lugar.
+        </span>
+      </div>
     </div>
   );
 }

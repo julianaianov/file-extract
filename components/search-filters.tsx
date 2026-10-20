@@ -1,11 +1,19 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Search, Filter, X, FileText, Mic, ImageIcon, File } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-
+import { useEffect, useState } from "react";
+import useSWR from "swr";
+import {
+  Search,
+  SlidersHorizontal,
+  X,
+  FileText,
+  AudioLines,
+  ImageIcon,
+  Layers3,
+  Trash2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 export interface SearchFilters {
   keyword: string;
   fileType: string;
@@ -16,194 +24,169 @@ export interface SearchFilters {
   uploadId?: number | null;
   transcriptionStatus?: string | null;
 }
-
-interface SearchFiltersProps {
+export const emptyFilters: SearchFilters = {
+  keyword: "",
+  fileType: "",
+  dateFrom: "",
+  dateTo: "",
+  timeFrom: "",
+  timeTo: "",
+  uploadId: null,
+  transcriptionStatus: null,
+};
+interface Props {
+  filters: SearchFilters;
   onSearch: (filters: SearchFilters) => void;
-  isLoading?: boolean;
-  onDeleteUpload?: (uploadId: number) => void;
+  onDeleteUpload?: (id: number) => void;
 }
-
-const fileTypes = [
-  { value: '', label: 'Todos', icon: File },
-  { value: 'text', label: 'Texto', icon: FileText },
-  { value: 'audio', label: 'Audio', icon: Mic },
-  { value: 'image', label: 'Imagem', icon: ImageIcon },
+const types = [
+  { value: "", label: "Todos", icon: Layers3 },
+  { value: "text", label: "Texto e PDF", icon: FileText },
+  { value: "audio", label: "Áudio", icon: AudioLines },
+  { value: "image", label: "Imagens", icon: ImageIcon },
 ];
-
-export function SearchFilters({ onSearch, isLoading, onDeleteUpload }: SearchFiltersProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [filters, setFilters] = useState<SearchFilters>({
-    keyword: '',
-    fileType: '',
-    dateFrom: '',
-    dateTo: '',
-    timeFrom: '',
-    timeTo: '',
-    uploadId: null,
-    transcriptionStatus: null,
-  });
-  const [uploads, setUploads] = useState<Array<{ id: number; original_name: string }>>([]);
-
+const fetchUploads = async (url: string) => {
+  const r = await fetch(url);
+  if (!r.ok) throw Error("Falha ao carregar uploads");
+  return r.json();
+};
+export function SearchFilters({ filters, onSearch, onDeleteUpload }: Props) {
+  const [advanced, setAdvanced] = useState(false),
+    [draft, setDraft] = useState(filters.keyword);
+  const { data: uploads = [] } = useSWR<
+    Array<{ id: number; original_name: string }>
+  >("/api/files?action=uploads", fetchUploads, { dedupingInterval: 15000 });
+  useEffect(() => setDraft(filters.keyword), [filters.keyword]);
   useEffect(() => {
-    fetch('/api/files?action=uploads')
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setUploads(data);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleSearch = () => {
-    onSearch(filters);
-  };
-
-  const handleClear = () => {
-    const cleared: SearchFilters = {
-      keyword: '',
-      fileType: '',
-      dateFrom: '',
-      dateTo: '',
-      timeFrom: '',
-      timeTo: '',
-      uploadId: null,
-      transcriptionStatus: null,
-    };
-    setFilters(cleared);
-    onSearch(cleared);
-  };
-
-  const hasFilters =
-    filters.keyword ||
-    filters.fileType ||
-    filters.dateFrom ||
-    filters.dateTo ||
-    filters.timeFrom ||
-    filters.timeTo ||
-    filters.uploadId;
-
+    if (draft === filters.keyword) return;
+    const timer = setTimeout(
+      () => onSearch({ ...filters, keyword: draft }),
+      350,
+    );
+    return () => clearTimeout(timer);
+  }, [draft, filters, onSearch]);
+  const active = Object.values(filters).some(Boolean);
+  const update = (value: Partial<SearchFilters>) =>
+    onSearch({ ...filters, keyword: draft, ...value });
   return (
-    <div className="space-y-4">
-      {/* Barra de busca principal */}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <div className="search-controls">
+      <form
+        className="search-toolbar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          update({});
+        }}
+      >
+        <div className="search-field">
+          <Search size={18} />
           <Input
-            placeholder="Buscar por palavras-chave..."
-            value={filters.keyword}
-            onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="pl-10"
+            aria-label="Buscar arquivos"
+            placeholder="Busque por nome, palavra ou conteúdo..."
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
           />
+          <span className="search-hint">↵</span>
         </div>
-        <Button onClick={handleSearch} disabled={isLoading}>
-          {isLoading ? 'Buscando...' : 'Buscar'}
-        </Button>
         <Button
           variant="outline"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className={cn(showAdvanced && 'bg-secondary')}
+          type="button"
+          className={advanced ? "filter-trigger selected" : "filter-trigger"}
+          aria-expanded={advanced}
+          aria-controls="advanced-filters"
+          onClick={() => setAdvanced(!advanced)}
         >
-          <Filter className="mr-2 h-4 w-4" />
-          Filtros
+          <SlidersHorizontal size={16} />
+          <span>Filtros</span>
         </Button>
-        {hasFilters && (
-          <Button variant="ghost" onClick={handleClear}>
-            <X className="mr-2 h-4 w-4" />
-            Limpar
-          </Button>
-        )}
-      </div>
-
-      {/* Seleção de Upload */}
-      <div className="flex items-center gap-3">
         <select
-          className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground"
-          value={filters.uploadId ?? ''}
-          onChange={(e) => {
-            const val = e.target.value ? Number(e.target.value) : null;
-            setFilters({ ...filters, uploadId: val });
-            onSearch({ ...filters, uploadId: val });
-          }}
+          aria-label="Filtrar por upload"
+          className="upload-select"
+          value={filters.uploadId ?? ""}
+          onChange={(e) =>
+            update({ uploadId: e.target.value ? Number(e.target.value) : null })
+          }
         >
           <option value="">Todos os uploads</option>
           {uploads.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.id} - {u.original_name}
+              {u.original_name}
             </option>
           ))}
         </select>
-        {filters.uploadId && onDeleteUpload && (
-          <Button
-            variant="outline"
-            onClick={() => onDeleteUpload(filters.uploadId!)}
-            title="Excluir todos os arquivos deste upload"
+      </form>
+      <div className="type-filter-row">
+        <div className="type-filters">
+          {types.map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              className={
+                filters.fileType === value ? "type-chip selected" : "type-chip"
+              }
+              onClick={() => update({ fileType: value })}
+              aria-pressed={filters.fileType === value}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+        {active && (
+          <button
+            className="clear-filters"
+            onClick={() => {
+              setDraft("");
+              onSearch(emptyFilters);
+            }}
           >
-            Excluir upload
-          </Button>
+            <X size={13} /> Limpar filtros
+          </button>
         )}
       </div>
-
-      {/* Filtros de tipo de arquivo */}
-      <div className="flex flex-wrap gap-2">
-        {fileTypes.map((type) => {
-          const Icon = type.icon;
-          return (
-            <button
-              key={type.value}
-              onClick={() => {
-                setFilters({ ...filters, fileType: type.value });
-                onSearch({ ...filters, fileType: type.value });
-              }}
-              className={cn(
-                'flex items-center gap-2 rounded-full px-4 py-2 text-sm transition-colors',
-                filters.fileType === type.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {type.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Filtros avançados */}
-      {showAdvanced && (
-        <div className="grid gap-4 rounded-lg border border-border bg-card p-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Data Inicial</label>
-            <Input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Data Final</label>
-            <Input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Hora Inicial</label>
-            <Input
-              type="time"
-              value={filters.timeFrom}
-              onChange={(e) => setFilters({ ...filters, timeFrom: e.target.value })}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Hora Final</label>
-            <Input
-              type="time"
-              value={filters.timeTo}
-              onChange={(e) => setFilters({ ...filters, timeTo: e.target.value })}
-            />
-          </div>
+      {filters.transcriptionStatus && (
+        <div className="flex items-center gap-2 text-xs text-amber-300">
+          Exibindo transcrições pendentes
+          <button
+            aria-label="Remover filtro de transcrição"
+            onClick={() => update({ transcriptionStatus: null })}
+          >
+            <X size={14} />
+          </button>
         </div>
+      )}
+      {advanced && (
+        <div id="advanced-filters" className="advanced-filters">
+          {(["dateFrom", "dateTo", "timeFrom", "timeTo"] as const).map(
+            (key, index) => (
+              <label key={key}>
+                <span>
+                  {
+                    [
+                      "Data inicial",
+                      "Data final",
+                      "Hora inicial",
+                      "Hora final",
+                    ][index]
+                  }
+                </span>
+                <Input
+                  type={index < 2 ? "date" : "time"}
+                  value={filters[key]}
+                  onChange={(e) => update({ [key]: e.target.value })}
+                />
+              </label>
+            ),
+          )}
+        </div>
+      )}
+      {filters.uploadId && onDeleteUpload && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive"
+          onClick={() => onDeleteUpload(filters.uploadId!)}
+        >
+          <Trash2 size={14} /> Excluir este upload
+        </Button>
       )}
     </div>
   );

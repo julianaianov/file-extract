@@ -1,213 +1,56 @@
 import { NextResponse } from 'next/server';
-import { createUpload, updateUploadStatus, createExtractedFile, type ExtractedFile } from '@/lib/db';
-import { isSearchEnabled, indexExtractedFile } from '@/lib/search';
+import { createUpload, updateUploadStatus, createExtractedFile, deleteUpload, type ExtractedFile } from '@/lib/db';
+import { saveStoredFile } from '@/lib/storage';
 import AdmZip from 'adm-zip';
+import pdf from 'pdf-parse/lib/pdf-parse.js';
 import path from 'path';
-import fs from 'fs';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
-// Diretórios para armazenamento
-const UPLOADS_DIR = path.join(process.cwd(), 'data', 'uploads');
-const EXTRACTED_DIR = path.join(process.cwd(), 'data', 'extracted');
-
-// Garantir que os diretórios existem
-function ensureDirectories() {
-  [UPLOADS_DIR, EXTRACTED_DIR].forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  });
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_EXTRACTED_BYTES = 100 * 1024 * 1024;
+function fileInfo(name: string): {type:ExtractedFile['file_type'];mime:string} {
+ const ext=path.extname(name).toLowerCase();
+ if(ext==='.pdf')return {type:'text',mime:'application/pdf'};
+ if(['.txt','.md','.json','.csv','.xml','.html','.log','.js','.ts','.css','.py','.sql','.yaml','.yml'].includes(ext))return {type:'text',mime:'text/plain'};
+ const audio:Record<string,string>={'.mp3':'audio/mpeg','.wav':'audio/wav','.ogg':'audio/ogg','.opus':'audio/ogg','.m4a':'audio/mp4','.flac':'audio/flac','.aac':'audio/aac','.webm':'audio/webm'};
+ const image:Record<string,string>={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif','.webp':'image/webp','.bmp':'image/bmp','.svg':'image/svg+xml'};
+ if(audio[ext])return {type:'audio',mime:audio[ext]};
+ if(image[ext])return {type:'image',mime:image[ext]};
+ return {type:'other',mime:'application/octet-stream'};
 }
-
-// Determinar o tipo de arquivo baseado na extensão e MIME type
-function getFileType(filename: string, mimeType?: string): ExtractedFile['file_type'] {
-  const ext = path.extname(filename).toLowerCase();
-
-  // Tipos de texto
-  const textExtensions = ['.txt', '.md', '.json', '.csv', '.xml', '.html', '.htm', '.log', '.js', '.ts', '.jsx', '.tsx', '.css', '.py', '.java', '.c', '.cpp', '.h', '.php', '.rb', '.go', '.rs', '.sql', '.yaml', '.yml', '.ini', '.cfg', '.conf'];
-  if (textExtensions.includes(ext)) return 'text';
-
-  // Tipos de áudio
-  const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.wma', '.opus', '.webm'];
-  if (audioExtensions.includes(ext)) return 'audio';
-  if (mimeType?.startsWith('audio/')) return 'audio';
-
-  // Tipos de imagem
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif'];
-  if (imageExtensions.includes(ext)) return 'image';
-  if (mimeType?.startsWith('image/')) return 'image';
-
-  return 'other';
-}
-
-// Obter MIME type baseado na extensão
-function getMimeType(filename: string): string {
-  const ext = path.extname(filename).toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    // Texto
-    '.txt': 'text/plain',
-    '.md': 'text/markdown',
-    '.json': 'application/json',
-    '.csv': 'text/csv',
-    '.xml': 'application/xml',
-    '.html': 'text/html',
-    '.htm': 'text/html',
-    '.css': 'text/css',
-    '.js': 'text/javascript',
-    '.ts': 'text/typescript',
-    // Áudio
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav',
-    '.ogg': 'audio/ogg',
-    '.opus': 'audio/ogg',
-    '.m4a': 'audio/mp4',
-    '.flac': 'audio/flac',
-    '.aac': 'audio/aac',
-    '.webm': 'audio/webm',
-    // Imagem
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.bmp': 'image/bmp',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-  };
-  return mimeTypes[ext] || 'application/octet-stream';
-}
-
-// Ler conteúdo de texto de um arquivo
-function readTextContent(filePath: string): string | null {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    // Limitar a 100KB de texto para evitar problemas de memória
-    return content.slice(0, 100000);
-  } catch {
-    return null;
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    ensureDirectories();
-
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-    const customName = (formData.get('customName') as string | null)?.trim();
-
-    if (!file) {
-      return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 });
-    }
-
-    // Verificar se é um arquivo ZIP
-    if (!file.name.endsWith('.zip')) {
-      return NextResponse.json({ error: 'Apenas arquivos ZIP são permitidos' }, { status: 400 });
-    }
-
-    // Gerar nome único para o arquivo
-    const uniqueId = uuidv4();
-    const savedFilename = `${uniqueId}.zip`;
-    const savedFilePath = path.join(UPLOADS_DIR, savedFilename);
-
-    // Salvar arquivo
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(savedFilePath, buffer);
-
-    // Criar registro no banco (usa customName se fornecido)
-    const displayName = customName && customName.length > 0 ? customName : file.name;
-    const uploadId = createUpload(savedFilename, displayName, file.size);
-
-    try {
-      // Extrair ZIP
-      const zip = new AdmZip(savedFilePath);
-      const zipEntries = zip.getEntries();
-
-      // Criar diretório para arquivos extraídos
-      const extractDir = path.join(EXTRACTED_DIR, uniqueId);
-      fs.mkdirSync(extractDir, { recursive: true });
-
-      let extractedCount = 0;
-
-      for (const entry of zipEntries) {
-        // Ignorar diretórios e arquivos ocultos
-        if (entry.isDirectory || entry.entryName.startsWith('__MACOSX') || entry.entryName.includes('.DS_Store')) {
-          continue;
-        }
-
-        const filename = path.basename(entry.entryName);
-        const extractedPath = path.join(extractDir, filename);
-
-        // Extrair arquivo
-        zip.extractEntryTo(entry, extractDir, false, true);
-
-        // Determinar tipo e MIME
-        const mimeType = getMimeType(filename);
-        const fileType = getFileType(filename, mimeType);
-
-        // Ler conteúdo de texto se aplicável
-        let contentText: string | null = null;
-        if (fileType === 'text') {
-          contentText = readTextContent(extractedPath);
-        }
-
-        // Criar registro do arquivo extraído
-        const newId = createExtractedFile(
-          uploadId,
-          filename,
-          extractedPath,
-          fileType,
-          entry.header.size,
-          mimeType,
-          contentText,
-          fileType === 'audio' ? 'pending' : 'not_applicable'
-        );
-        // Indexar no Elasticsearch (assíncrono, sem bloquear)
-        if (isSearchEnabled()) {
-          // montar objeto mínimo para indexação
-          const fileDoc: ExtractedFile = {
-            id: newId,
-            upload_id: uploadId,
-            filename,
-            file_path: extractedPath,
-            file_type: fileType,
-            file_size: entry.header.size,
-            mime_type: mimeType,
-            extracted_date: new Date().toISOString(),
-            content_text: contentText ?? null,
-            transcription: null,
-            transcription_status: fileType === 'audio' ? 'pending' : 'not_applicable',
-            metadata: null,
-          };
-          indexExtractedFile(fileDoc).catch(() => {});
-        }
-
-        extractedCount++;
-      }
-
-      // Atualizar status do upload
-      updateUploadStatus(uploadId, 'completed', extractedCount);
-
-      return NextResponse.json({
-        success: true,
-        uploadId,
-        message: `Arquivo processado com sucesso. ${extractedCount} arquivos extraídos.`,
-        totalFiles: extractedCount,
-      });
-    } catch (extractError) {
-      const errorMessage = extractError instanceof Error ? extractError.message : 'Erro ao extrair arquivo';
-      updateUploadStatus(uploadId, 'error', 0, errorMessage);
-      return NextResponse.json({ error: errorMessage }, { status: 500 });
-    }
-  } catch (error) {
-    console.error('Erro no upload:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erro interno do servidor' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET() {
-  return NextResponse.json({ message: 'Use POST para enviar arquivos' });
+export async function POST(request:Request) {
+ let uploadId:number|undefined;
+ try {
+ const form=await request.formData(),file=form.get('file');
+ if(!(file instanceof File))return NextResponse.json({error:'Nenhum arquivo enviado'},{status:400});
+ const extension=path.extname(file.name).toLowerCase();
+ if(!['.zip','.pdf'].includes(extension))return NextResponse.json({error:'Selecione um arquivo ZIP ou PDF'},{status:400});
+ if(!file.size||file.size>MAX_BYTES)return NextResponse.json({error:'O arquivo deve ter entre 1 byte e 4 MB'},{status:413});
+ const buffer=Buffer.from(await file.arrayBuffer());
+ const customName=form.get('customName'),uniqueId=randomUUID();
+ // Validate archives before creating any records.
+ const entries=extension==='.zip'?new AdmZip(buffer).getEntries().filter(e=>!e.isDirectory&&!e.entryName.startsWith('__MACOSX')&&!e.entryName.includes('.DS_Store')):null;
+ if(entries&&(entries.length>1000||entries.reduce((n,e)=>n+e.header.size,0)>MAX_EXTRACTED_BYTES))return NextResponse.json({error:'ZIP excede o limite de 1000 arquivos ou 100 MB extraídos'},{status:413});
+ const savedFilename=uniqueId+extension;
+ uploadId=await createUpload(savedFilename,typeof customName==='string'&&customName.trim()?customName.trim():file.name,file.size);
+ await saveStoredFile('uploads/'+savedFilename,uploadId,buffer);
+ const extracted=entries?entries.map((entry,index)=>({name:path.posix.basename(entry.entryName.replaceAll('\\','/')),key:uniqueId+'/'+index,data:()=>entry.getData()})):[{name:file.name,key:uniqueId+'/0',data:()=>buffer}];
+ for(const entry of extracted) {
+ const data=entry.data(),info=fileInfo(entry.name);
+ if(data.length>MAX_EXTRACTED_BYTES)throw new Error('Arquivo extraído excede o limite');
+ let text:string|null=null;
+ if(info.type==='text')text=(info.mime==='application/pdf'?(await pdf(data)).text:data.toString('utf8')).slice(0,1000000);
+ const key='extracted/'+entry.key;
+ await saveStoredFile(key,uploadId,data);
+ await createExtractedFile(uploadId,entry.name,key,info.type,data.length,info.mime,text,info.type==='audio'?'pending':'not_applicable');
+ }
+ await updateUploadStatus(uploadId,'completed',extracted.length);
+ return NextResponse.json({success:true,uploadId,totalFiles:extracted.length,message:'Arquivo processado com sucesso'});
+ } catch(error) {
+ if(uploadId)await deleteUpload(uploadId).catch(()=>{});
+ console.error('Falha ao processar upload:', {name: error instanceof Error ? error.name : 'Error', code: (error as {code?:string})?.code, message: error instanceof Error ? error.message.replace(/postgres(?:ql)?:\/\/[^\s]+/g, '[REDACTED]') : 'Unknown'});
+ return NextResponse.json({error:'Não foi possível processar o arquivo. Verifique a conexão com o Supabase e se o ZIP/PDF é válido.'},{status:500});
+ }
 }

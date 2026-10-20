@@ -1,0 +1,15 @@
+const fs=require("fs"),{execFileSync}=require("child_process");
+const git=(...args)=>execFileSync("git",["-c","safe.directory="+process.cwd().replaceAll("\\","/"),...args],{encoding:"utf8",maxBuffer:20*1024*1024});
+const files=git("diff","--cached","--name-only","--diff-filter=ACMR").trim().split(/\r?\n/).filter(Boolean);
+const env=fs.existsSync(".env.local")?fs.readFileSync(".env.local","utf8"):"";
+const secrets=env.split(/\r?\n/).filter(line=>/^(DATABASE_URL|OPENAI_API_KEY|VERCEL_OIDC_TOKEN|SUPABASE_SERVICE_ROLE_KEY)=/.test(line)).map(line=>line.slice(line.indexOf("=")+1).trim().replace(/^["']|["']$/g,"")).filter(value=>value.length>8);
+const connection=secrets.find(value=>value.startsWith("postgresql://"));
+if(connection){try{const password=decodeURIComponent(new URL(connection).password);if(password.length>=8)secrets.push(password)}catch{}}
+const failures=[];
+for(const file of files){
+if((/^\.env(?:\.|$)/.test(file)&&file!==".env.example")||file.startsWith(".vercel/")||file.startsWith("artifacts/")){failures.push(file);continue}
+const content=git("show",":"+file);
+if(secrets.some(secret=>content.includes(secret))||/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(content))failures.push(file);
+}
+if(failures.length){console.error("Arquivos bloqueados na auditoria:",failures.join(", "));process.exit(1)}
+console.log("PASS auditoria: "+files.length+" arquivos preparados; credenciais e artefatos locais fora do commit.");

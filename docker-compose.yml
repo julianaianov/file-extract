@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
       - PORT=${PORT:-3000}
       # Idiomas OCR (padrão português + inglês)
       - OCR_LANG=${OCR_LANG:-por+eng}
@@ -16,7 +19,7 @@ services:
     ports:
       - "${PORT:-3000}:3000"
     volumes:
-      # Persistência de banco SQLite e arquivos extraídos
+      # Dados legados locais (os novos uploads ficam no Supabase)
       - ./data:/app/data
     depends_on:
       - elasticsearch

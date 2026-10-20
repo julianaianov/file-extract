@@ -1,7 +1,12 @@
-'use client';
-
-import { Upload, FileText, Mic, ImageIcon, Clock } from 'lucide-react';
-
+"use client";
+import {
+  Layers3,
+  FileText,
+  AudioLines,
+  ImageIcon,
+  ArrowUpRight,
+  Clock3,
+} from "lucide-react";
 interface Stats {
   totalUploads: number;
   totalFiles: number;
@@ -10,81 +15,86 @@ interface Stats {
   imageFiles: number;
   pendingTranscriptions: number;
 }
-
-interface StatsCardsProps {
-  stats: Stats;
-  onCardClick?: (target: { type?: 'text' | 'audio' | 'image' | 'other'; transcriptionStatus?: string } | null) => void;
+interface Props {
+  stats?: Stats;
+  onCardClick?: (
+    target: {
+      type?: "text" | "audio" | "image" | "other";
+      transcriptionStatus?: string;
+    } | null,
+  ) => void;
 }
-
-export function StatsCards({ stats, onCardClick }: StatsCardsProps) {
+export function StatsCards({ stats, onCardClick }: Props) {
   const cards = [
     {
-      label: 'Total Uploads',
-      value: stats.totalUploads,
-      icon: Upload,
-      color: 'text-blue-400',
-      bg: 'bg-blue-500/10 border-blue-500/20',
-      iconBg: 'bg-blue-500/20',
+      label: "Todos os arquivos",
+      value: stats?.totalFiles,
+      detail: stats ? stats.totalUploads + " uploads no total" : "",
+      icon: Layers3,
+      tone: "cyan",
       target: null,
     },
     {
-      label: 'Arquivos de Texto',
-      value: stats.textFiles,
+      label: "Textos e PDFs",
+      value: stats?.textFiles,
+      detail: "Conteúdo para descobrir",
       icon: FileText,
-      color: 'text-green-400',
-      bg: 'bg-emerald-500/10 border-emerald-500/20',
-      iconBg: 'bg-emerald-500/20',
-      target: { type: 'text' as const },
+      tone: "lime",
+      target: { type: "text" as const },
     },
     {
-      label: 'Arquivos de Audio',
-      value: stats.audioFiles,
-      icon: Mic,
-      color: 'text-yellow-400',
-      bg: 'bg-amber-500/10 border-amber-500/20',
-      iconBg: 'bg-amber-500/20',
-      target: { type: 'audio' as const },
+      label: "Arquivos de áudio",
+      value: stats?.audioFiles,
+      detail: "Uma nova forma de ouvir",
+      icon: AudioLines,
+      tone: "purple",
+      target: { type: "audio" as const },
     },
     {
-      label: 'Imagens',
-      value: stats.imageFiles,
+      label: "Imagens",
+      value: stats?.imageFiles,
+      detail: "Cada detalhe importa",
       icon: ImageIcon,
-      color: 'text-pink-400',
-      bg: 'bg-fuchsia-500/10 border-fuchsia-500/20',
-      iconBg: 'bg-fuchsia-500/20',
-      target: { type: 'image' as const },
+      tone: "pink",
+      target: { type: "image" as const },
     },
     {
-      label: 'Transcricoes Pendentes',
-      value: stats.pendingTranscriptions,
-      icon: Clock,
-      color: 'text-orange-400',
-      bg: 'bg-orange-500/10 border-orange-500/20',
-      iconBg: 'bg-orange-500/20',
-      target: { transcriptionStatus: 'pending' },
+      label: "Áudios pendentes",
+      value: stats?.pendingTranscriptions,
+      detail: "Aguardando transcrição",
+      icon: Clock3,
+      tone: "amber",
+      target: { type: "audio" as const, transcriptionStatus: "pending" },
     },
   ];
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-      {cards.map((card) => {
-        const Icon = card.icon;
-        return (
-          <button
-            key={card.label}
-            onClick={() => onCardClick?.(card.target)}
-            className={`flex items-center gap-4 rounded-lg border p-4 text-left transition ${card.bg} hover:brightness-110`}
-          >
-            <div className={`rounded-lg p-3 ${card.iconBg} ${card.color}`}>
-              <Icon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{card.value}</p>
-              <p className="text-sm text-muted-foreground">{card.label}</p>
-            </div>
-          </button>
-        );
-      })}
-    </div>
+    <section className="stats-grid" aria-label="Resumo do workspace">
+      {cards.map(({ icon: Icon, ...card }) => (
+        <button
+          key={card.label}
+          className={"stat-card " + card.tone}
+          onClick={() => onCardClick?.(card.target)}
+          aria-label={"Filtrar: " + card.label}
+        >
+          <div className="stat-top">
+            <span className="stat-icon">
+              <Icon size={17} />
+            </span>
+            <ArrowUpRight className="stat-arrow" size={15} />
+          </div>
+          {card.value === undefined ? (
+            <span className="skeleton stat-skeleton" aria-label="Carregando" />
+          ) : (
+            <strong className="stat-number">
+              {new Intl.NumberFormat("pt-BR").format(card.value)}
+            </strong>
+          )}
+          <span className="stat-label">{card.label}</span>
+          <span className="stat-detail">
+            {card.detail || "Carregando seu workspace"}
+          </span>
+        </button>
+      ))}
+    </section>
   );
 }

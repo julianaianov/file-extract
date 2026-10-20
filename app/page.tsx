@@ -1,32 +1,51 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import useSWR, { mutate } from 'swr';
-import { FileUpload } from '@/components/file-upload';
-import { SearchFilters, type SearchFilters as SearchFiltersType } from '@/components/search-filters';
-import { FileList } from '@/components/file-list';
-import { StatsCards } from '@/components/stats-cards';
-import { ContextSearch } from '@/components/context-search';
-import { Archive } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import Loading from './loading';
+import { useState, useCallback } from "react";
+import dynamic from "next/dynamic";
+import useSWR, { mutate } from "swr";
+import {
+  Archive,
+  ArrowDown,
+  ArrowUpRight,
+  AudioLines,
+  ChevronRight,
+  CircleHelp,
+  Command,
+  FileSearch,
+  FolderOpen,
+  Layers3,
+  LayoutDashboard,
+  Loader2,
+  RefreshCw,
+  ScanText,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  Zap,
+} from "lucide-react";
+import { FileUpload } from "@/components/file-upload";
+import {
+  SearchFilters,
+  emptyFilters,
+  type SearchFilters as Filters,
+} from "@/components/search-filters";
+import { FileList } from "@/components/file-list";
+import { StatsCards } from "@/components/stats-cards";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import type { ExtractedFile } from "@/lib/db";
 
-interface ExtractedFile {
-  id: number;
-  upload_id: number;
-  filename: string;
-  file_path: string;
-  file_type: 'text' | 'audio' | 'image' | 'other';
-  file_size: number;
-  mime_type: string | null;
-  extracted_date: string;
-  content_text: string | null;
-  transcription: string | null;
-  transcription_status: 'pending' | 'processing' | 'completed' | 'error' | 'not_applicable';
-  upload_name?: string;
-}
-
+const ContextSearch = dynamic(
+  () => import("@/components/context-search").then((m) => m.ContextSearch),
+  { loading: () => <div className="skeleton h-44 rounded-2xl" /> },
+);
+const fetcher = async (url: string) => {
+  const response = await fetch(url);
+  const result = await response.json();
+  if (!response.ok)
+    throw new Error(result.error || "Não foi possível carregar os dados.");
+  return result;
+};
 interface Stats {
   totalUploads: number;
   totalFiles: number;
@@ -35,183 +54,395 @@ interface Stats {
   imageFiles: number;
   pendingTranscriptions: number;
 }
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
 export default function Home() {
-  const [filters, setFilters] = useState<SearchFiltersType>({
-    keyword: '',
-    fileType: '',
-    dateFrom: '',
-    dateTo: '',
-    timeFrom: '',
-    timeTo: '',
-    uploadId: null,
-    transcriptionStatus: null,
-  });
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [tab, setTab] = useState<"files" | "context">("files");
   const [transcribingIds, setTranscribingIds] = useState<number[]>([]);
-  const searchParams = useSearchParams();
-
-  // Construir URL de busca com filtros
-  const buildSearchUrl = useCallback(() => {
-    const params = new URLSearchParams();
-    if (filters.keyword) params.set('keyword', filters.keyword);
-    if (filters.fileType) params.set('fileType', filters.fileType);
-    if (filters.transcriptionStatus) params.set('transcriptionStatus', filters.transcriptionStatus);
-    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-    if (filters.dateTo) params.set('dateTo', filters.dateTo);
-    if (filters.timeFrom) params.set('timeFrom', filters.timeFrom);
-    if (filters.timeTo) params.set('timeTo', filters.timeTo);
-    if (filters.uploadId) params.set('uploadId', String(filters.uploadId));
-    return `/api/files?${params.toString()}`;
-  }, [filters]);
-
-  // Buscar arquivos
-  const { data: filesData, isLoading: filesLoading } = useSWR<{ files: ExtractedFile[] }>(
-    buildSearchUrl(),
-    fetcher,
-    { refreshInterval: 5000 }
-  );
-
-  // Buscar estatísticas
-  const { data: statsData } = useSWR<Stats>('/api/files?action=stats', fetcher, {
-    refreshInterval: 10000,
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, String(value));
   });
-
-  const handleSearch = (newFilters: SearchFiltersType) => {
-    setFilters(newFilters);
-  };
-
-  const handleUploadComplete = () => {
-    // Atualizar dados após upload
-    mutate(buildSearchUrl());
-    mutate('/api/files?action=stats');
-  };
-
-  const handleTranscribe = async (fileId: number) => {
-    setTranscribingIds((prev) => [...prev, fileId]);
-
+  const filesUrl = "/api/files?" + params;
+  const {
+    data: filesData,
+    error: filesError,
+    isLoading: filesLoading,
+    isValidating,
+    mutate: refreshFiles,
+  } = useSWR<{ files: ExtractedFile[] }>(filesUrl, fetcher, {
+    keepPreviousData: true,
+    dedupingInterval: 10000,
+    refreshInterval: transcribingIds.length ? 5000 : 0,
+  });
+  const {
+    data: stats,
+    error: statsError,
+    mutate: refreshStats,
+  } = useSWR<Stats>("/api/files?action=stats", fetcher, {
+    dedupingInterval: 15000,
+  });
+  const { data: capabilities } = useSWR<{ hasOpenAIKey: boolean }>(
+    "/api/debug-env",
+    fetcher,
+    { dedupingInterval: 60000 },
+  );
+  const refresh = useCallback(() => {
+    void refreshFiles();
+    void refreshStats();
+    void mutate("/api/files?action=uploads");
+  }, [refreshFiles, refreshStats]);
+  const scrollTo = (id: string) =>
+    document
+      .getElementById(id)
+      ?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+        block: "start",
+      });
+  const transcribe = async (fileId: number) => {
+    setTranscribingIds((ids) => [...ids, fileId]);
     try {
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const r = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileId }),
       });
-
-      if (response.ok) {
-        // Atualizar lista após transcrição
-        mutate(buildSearchUrl());
-        mutate('/api/files?action=stats');
-      }
-    } catch (error) {
-      console.error('Erro na transcrição:', error);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Não foi possível transcrever.");
+      toast.success("Áudio transcrito com sucesso.");
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na transcrição.");
     } finally {
-      setTranscribingIds((prev) => prev.filter((id) => id !== fileId));
+      setTranscribingIds((ids) => ids.filter((id) => id !== fileId));
     }
   };
-
-  // Atualizar busca quando filtros mudam
-  useEffect(() => {
-    mutate(buildSearchUrl());
-  }, [buildSearchUrl]);
-
+  const connected = !!stats && !statsError;
   return (
-    <main className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="rounded-lg bg-accent p-2">
-            <Archive className="h-6 w-6 text-accent-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">File Extractor</h1>
-            <p className="text-sm text-muted-foreground">
-              Processamento de arquivos ZIP com extração e transcrição
-            </p>
-          </div>
+    <main className="app-shell">
+      <aside className="workspace-sidebar" aria-label="Navegação principal">
+        <a href="/" className="brand-mark" aria-label="File Extract início">
+          <Layers3 size={25} />
+        </a>
+        <div className="sidebar-navigation">
+          <button
+            className="sidebar-item active"
+            title="Visão geral"
+            aria-label="Visão geral"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          >
+            <LayoutDashboard size={21} />
+          </button>
+          <button
+            className="sidebar-item"
+            title="Enviar arquivo"
+            aria-label="Enviar arquivo"
+            onClick={() => scrollTo("upload")}
+          >
+            <Upload size={21} />
+          </button>
+          <button
+            className="sidebar-item"
+            title="Biblioteca"
+            aria-label="Biblioteca"
+            onClick={() => {
+              setTab("files");
+              scrollTo("library");
+            }}
+          >
+            <FolderOpen size={21} />
+          </button>
+          <button
+            className="sidebar-item"
+            title="Busca de contexto"
+            aria-label="Busca de contexto"
+            onClick={() => {
+              setTab("context");
+              scrollTo("library");
+            }}
+          >
+            <ScanText size={21} />
+          </button>
         </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="space-y-8">
-          {/* Estatísticas */}
-          {statsData && (
-            <StatsCards
-              stats={statsData}
-              onCardClick={(target) => {
-                if (!target) {
-                  setFilters({
-                    keyword: '',
-                    fileType: '',
-                    dateFrom: '',
-                    dateTo: '',
-                    timeFrom: '',
-                    timeTo: '',
-                    uploadId: null,
-                    transcriptionStatus: null,
-                  });
-                  return;
-                }
-                setFilters((prev) => ({
-                  ...prev,
-                  fileType: (target as any).type ?? '',
-                  transcriptionStatus: target.transcriptionStatus ?? null,
-                }));
-              }}
-            />
-          )}
-
-          {/* Upload */}
-          <section className="rounded-lg border border-border bg-card p-6">
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Upload de Arquivo ZIP</h2>
-            <FileUpload onUploadComplete={handleUploadComplete} />
-          </section>
-
-          {/* Busca e Filtros */}
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Buscar Arquivos</h2>
-            <SearchFilters
-              onSearch={handleSearch}
-              isLoading={filesLoading}
-              onDeleteUpload={async (uploadId) => {
-                if (!confirm('Deseja excluir todos os arquivos deste upload?')) return;
-                const res = await fetch(`/api/files/${uploadId}`, { method: 'DELETE' });
-                if (res.ok) {
-                  mutate(buildSearchUrl());
-                  mutate('/api/files?action=stats');
-                }
-              }}
-            />
-          </section>
-
-          {/* Busca de Contexto de Conversa */}
-          <ContextSearch />
-
-          {/* Lista de Arquivos */}
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">
-                Arquivos Extraídos
-                {filesData?.files && (
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({filesData.files.length} encontrados)
-                  </span>
-                )}
-              </h2>
+        <a
+          href="#help"
+          className="sidebar-item mt-auto"
+          aria-label="Como funciona"
+          title="Como funciona"
+        >
+          <CircleHelp size={21} />
+        </a>
+        <div className="sidebar-avatar" title="Seu workspace">
+          FE
+        </div>
+      </aside>
+      <div className="workspace-main">
+        <header className="workspace-header">
+          <a href="/" className="flex items-center gap-2 text-sm font-semibold">
+            <span className="text-cyan-300">
+              <Layers3 size={20} />
+            </span>{" "}
+            file<span className="text-muted-foreground">extract</span>
+            <span className="version-pill">2.0</span>
+          </a>
+          <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+            Workspace <ChevronRight size={12} />{" "}
+            <span className="text-foreground">Visão geral</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span
+              className={`connection-badge ${statsError ? "connection-error" : ""}`}
+            >
+              <span
+                className={connected ? "status-dot" : "status-dot pending"}
+              />
+              {statsError
+                ? "Sem conexão"
+                : connected
+                  ? "Conectado"
+                  : "Conectando"}
+            </span>
+            <button
+              className="icon-control"
+              title="Atualizar arquivos"
+              aria-label="Atualizar arquivos"
+              onClick={refresh}
+              disabled={isValidating}
+            >
+              <RefreshCw
+                size={16}
+                className={isValidating ? "animate-spin" : ""}
+              />
+            </button>
+          </div>
+        </header>
+        <div className="dashboard-content">
+          <section className="hero-section">
+            <div className="hero-copy">
+              <div className="eyebrow">
+                <span className="eyebrow-line" /> ORGANIZE. EXTRAIA. DESCUBRA.
+              </div>
+              <h1>
+                Seus arquivos.
+                <br />
+                <span className="hero-highlight">Novas possibilidades.</span>
+              </h1>
+              <p>
+                Transforme ZIPs e PDFs em conteúdo acessível.
+                <br className="hidden sm:block" /> Envie, explore e encontre o
+                que realmente importa.
+              </p>
+              <button className="hero-link" onClick={() => scrollTo("upload")}>
+                Comece com um arquivo <ArrowDown size={15} />
+              </button>
             </div>
-            <Suspense fallback={<Loading />}>
-              <FileList
-                files={filesData?.files || []}
-                isLoading={filesLoading}
-                onTranscribe={handleTranscribe}
-                transcribingIds={transcribingIds}
-                onChanged={() => {
-                  mutate(buildSearchUrl());
-                  mutate('/api/files?action=stats');
+            <div className="hero-orbit" aria-hidden="true">
+              <div className="orbit-ring orbit-one" />
+              <div className="orbit-ring orbit-two" />
+              <div className="orbit-center">
+                <Layers3 size={40} />
+              </div>
+              <div className="floating-document doc-pdf">
+                <span className="doc-icon">
+                  <FileSearch size={19} />
+                </span>
+                <div>
+                  <b>documento.pdf</b>
+                  <small>Conteúdo extraído</small>
+                </div>
+                <span className="mini-check">✓</span>
+              </div>
+              <div className="floating-document doc-zip">
+                <span className="doc-icon">
+                  <Archive size={20} />
+                </span>
+                <div>
+                  <b>projeto.zip</b>
+                  <small>Pronto para explorar</small>
+                </div>
+                <Sparkles size={15} />
+              </div>
+              <span className="orbit-star star-one" />
+              <span className="orbit-star star-two" />
+              <span className="orbit-star star-three" />
+            </div>
+          </section>
+          <StatsCards
+            stats={stats}
+            onCardClick={(target) => {
+              setFilters({
+                ...emptyFilters,
+                fileType: target?.type || "",
+                transcriptionStatus: target?.transcriptionStatus || null,
+              });
+              setTab("files");
+              scrollTo("library");
+            }}
+          />
+          <div className="upload-layout">
+            <section id="upload" className="surface upload-panel">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-kicker">01 / IMPORTAR</span>
+                  <h2>
+                    Um novo ponto de partida
+                    <span className="text-cyan-300">.</span>
+                  </h2>
+                </div>
+                <span className="soft-tag">
+                  <Zap size={12} /> Extração automática
+                </span>
+              </div>
+              <FileUpload
+                onUploadComplete={() => {
+                  refresh();
+                  toast.success("Seu arquivo já está na biblioteca.");
                 }}
               />
-            </Suspense>
+            </section>
+            <aside className="surface workflow-panel" id="help">
+              <span className="section-kicker">DO ARQUIVO À INFORMAÇÃO</span>
+              <h2>
+                Simples por fora.
+                <br />
+                <span className="text-muted-foreground">
+                  Poderoso por dentro.
+                </span>
+              </h2>
+              <div className="workflow-step">
+                <span className="step-icon cyan">
+                  <Upload size={18} />
+                </span>
+                <div>
+                  <h3>Envie seu arquivo</h3>
+                  <p>ZIP ou PDF, direto do seu dispositivo.</p>
+                </div>
+                <span className="step-number">01</span>
+              </div>
+              <div className="workflow-step">
+                <span className="step-icon purple">
+                  <ScanText size={18} />
+                </span>
+                <div>
+                  <h3>Extraia possibilidades</h3>
+                  <p>Texto de PDFs e arquivos organizados.</p>
+                </div>
+                <span className="step-number">02</span>
+              </div>
+              <div className="workflow-step">
+                <span className="step-icon lime">
+                  <FileSearch size={18} />
+                </span>
+                <div>
+                  <h3>Encontre o que precisa</h3>
+                  <p>Pesquise, visualize e baixe em um lugar.</p>
+                </div>
+                <span className="step-number">03</span>
+              </div>
+              <div className="workflow-footer">
+                <ShieldCheck size={15} />
+                <span>Seus arquivos disponíveis no seu workspace.</span>
+              </div>
+            </aside>
+          </div>
+          <section id="library" className="surface library-panel">
+            <div className="panel-heading library-heading">
+              <div>
+                <span className="section-kicker">02 / EXPLORAR</span>
+                <h2>
+                  Sua biblioteca<span className="text-lime-300">.</span>
+                </h2>
+              </div>
+              <span className="soft-tag">
+                {stats?.totalFiles ?? "—"} arquivos no workspace
+              </span>
+            </div>
+            <div
+              className="library-tabs"
+              role="tablist"
+              aria-label="Modo de exploração"
+            >
+              <button
+                id="files-tab"
+                role="tab"
+                aria-selected={tab === "files"}
+                aria-controls="files-panel"
+                className={tab === "files" ? "selected" : ""}
+                onClick={() => setTab("files")}
+              >
+                <FolderOpen size={16} /> Arquivos{" "}
+                <span>{filesData?.files.length ?? 0}</span>
+              </button>
+              <button
+                id="context-tab"
+                role="tab"
+                aria-selected={tab === "context"}
+                aria-controls="context-panel"
+                className={tab === "context" ? "selected" : ""}
+                onClick={() => setTab("context")}
+              >
+                <ScanText size={16} /> Busca de contexto
+              </button>
+            </div>
+            {tab === "files" ? (
+              <div
+                role="tabpanel"
+                id="files-panel"
+                aria-labelledby="files-tab"
+                className="library-body"
+              >
+                <SearchFilters filters={filters} onSearch={setFilters} />
+                {filesError ? (
+                  <div className="error-panel" role="alert">
+                    <h3>Não foi possível carregar sua biblioteca</h3>
+                    <p>{filesError.message}</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => void refreshFiles()}
+                    >
+                      Tentar novamente
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    className={
+                      isValidating && !filesLoading ? "results-refreshing" : ""
+                    }
+                    aria-busy={isValidating}
+                  >
+                    <FileList
+                      files={filesData?.files || []}
+                      isLoading={filesLoading}
+                      onTranscribe={transcribe}
+                      transcribingIds={transcribingIds}
+                      transcriptionEnabled={!!capabilities?.hasOpenAIKey}
+                      onChanged={refresh}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                role="tabpanel"
+                id="context-panel"
+                aria-labelledby="context-tab"
+                className="library-body"
+              >
+                <ContextSearch />
+              </div>
+            )}
           </section>
+          <footer className="workspace-footer">
+            <span className="flex items-center gap-2">
+              <Layers3 size={14} /> fileextract{" "}
+              <span className="text-muted-foreground/50">/</span> Dê sentido aos
+              seus arquivos.
+            </span>
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck size={13} /> Seu conteúdo, organizado.
+            </span>
+          </footer>
         </div>
       </div>
     </main>
