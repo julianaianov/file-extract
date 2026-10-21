@@ -1,8 +1,9 @@
+import { withWorkspace } from "@/lib/workspace";
 import { NextResponse } from 'next/server';
 import { searchFiles, getAllUploads, getStatistics, type SearchFilters } from '@/lib/db';
 
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
 
@@ -69,3 +70,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withWorkspace(handleGET);

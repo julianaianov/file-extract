@@ -1,3 +1,4 @@
+import { withWorkspace } from "@/lib/workspace";
 import { NextResponse } from 'next/server';
 import { searchFiles } from '@/lib/db';
 
@@ -65,7 +66,7 @@ function findContexts(lines: string[], q: string, windowSize: number, maxResults
   return matches;
 }
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const qRaw = (searchParams.get('q') || searchParams.get('keyword') || '').trim();
@@ -115,3 +116,5 @@ export async function GET(request: Request) {
 
 
 
+
+export const GET = withWorkspace(handleGET);

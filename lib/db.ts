@@ -1,3 +1,4 @@
+import { ownerScope } from "./workspace";
 import { query } from "./postgres";
 import { searchContext, type SearchContext } from "./search-context";
 export interface Upload {
@@ -34,8 +35,8 @@ export async function createUpload(
 ): Promise<number> {
   return (
     await query(
-      "INSERT INTO public.uploads(filename,original_name,file_size) VALUES($1,$2,$3) RETURNING id",
-      [filename, originalName, fileSize],
+      "INSERT INTO public.uploads(filename,original_name,file_size,owner_key) VALUES($1,$2,$3,$4) RETURNING id",
+      [filename, originalName, fileSize, ownerScope()],
     )
   ).rows[0].id;
 }
@@ -51,15 +52,15 @@ export async function updateUploadStatus(
   );
 }
 export async function getUpload(id: number): Promise<Upload | undefined> {
-  return (await query("SELECT * FROM public.uploads WHERE id=$1", [id]))
+  return (await query("SELECT * FROM public.uploads WHERE id=$1 AND ($2::text IS NULL OR owner_key=$2)", [id, ownerScope()]))
     .rows[0];
 }
 export async function getAllUploads(): Promise<Upload[]> {
-  return (await query("SELECT * FROM public.uploads ORDER BY upload_date DESC"))
+  return (await query("SELECT * FROM public.uploads WHERE ($1::text IS NULL OR owner_key=$1) ORDER BY upload_date DESC", [ownerScope()]))
     .rows;
 }
 export async function deleteUpload(id: number) {
-  await query("DELETE FROM public.uploads WHERE id=$1", [id]);
+  await query("DELETE FROM public.uploads WHERE id=$1 AND ($2::text IS NULL OR owner_key=$2)", [id, ownerScope()]);
 }
 export async function createExtractedFile(
   uploadId: number,
@@ -91,7 +92,7 @@ export async function createExtractedFile(
 export async function getExtractedFile(
   id: number,
 ): Promise<ExtractedFile | undefined> {
-  return (await query("SELECT * FROM public.extracted_files WHERE id=$1", [id]))
+  return (await query("SELECT ef.* FROM public.extracted_files ef JOIN public.uploads u ON u.id=ef.upload_id WHERE ef.id=$1 AND ($2::text IS NULL OR u.owner_key=$2)", [id, ownerScope()]))
     .rows[0];
 }
 export async function getExtractedFilesByUpload(
@@ -99,8 +100,8 @@ export async function getExtractedFilesByUpload(
 ): Promise<ExtractedFile[]> {
   return (
     await query(
-      "SELECT * FROM public.extracted_files WHERE upload_id=$1 ORDER BY filename",
-      [id],
+      "SELECT ef.* FROM public.extracted_files ef JOIN public.uploads u ON u.id=ef.upload_id WHERE ef.upload_id=$1 AND ($2::text IS NULL OR u.owner_key=$2) ORDER BY ef.filename",
+      [id, ownerScope()],
     )
   ).rows;
 }
@@ -126,7 +127,7 @@ export async function updateTranscription(
 export async function getPendingAudioFiles(): Promise<ExtractedFile[]> {
   return (
     await query(
-      "SELECT * FROM public.extracted_files WHERE file_type='audio' AND transcription_status='pending'",
+      "SELECT ef.* FROM public.extracted_files ef JOIN public.uploads u ON u.id=ef.upload_id WHERE file_type='audio' AND transcription_status='pending' AND ($1::text IS NULL OR u.owner_key=$1)", [ownerScope()],
     )
   ).rows;
 }
@@ -150,6 +151,8 @@ export async function searchFiles(
     values.push(value);
     where.push(sql.replaceAll("?", "$" + values.length));
   };
+  const scope = ownerScope();
+  if (scope) add("u.owner_key=?", scope);
   if (f.keyword)
     add(
       "(ef.content_text ILIKE ? OR ef.transcription ILIKE ? OR ef.filename ILIKE ?)",
@@ -182,7 +185,7 @@ export async function searchFiles(
 export async function getStatistics() {
   const row = (
     await query(
-      `SELECT (SELECT COUNT(*)::int FROM public.uploads) AS "totalUploads",COUNT(*)::int AS "totalFiles",COUNT(*) FILTER(WHERE file_type='text')::int AS "textFiles",COUNT(*) FILTER(WHERE file_type='audio')::int AS "audioFiles",COUNT(*) FILTER(WHERE file_type='image')::int AS "imageFiles",COUNT(*) FILTER(WHERE transcription_status='pending')::int AS "pendingTranscriptions" FROM public.extracted_files`,
+      `SELECT (SELECT COUNT(*)::int FROM public.uploads WHERE ($1::text IS NULL OR owner_key=$1)) AS "totalUploads",COUNT(*)::int AS "totalFiles",COUNT(*) FILTER(WHERE file_type='text')::int AS "textFiles",COUNT(*) FILTER(WHERE file_type='audio')::int AS "audioFiles",COUNT(*) FILTER(WHERE file_type='image')::int AS "imageFiles",COUNT(*) FILTER(WHERE transcription_status='pending')::int AS "pendingTranscriptions" FROM public.extracted_files ef JOIN public.uploads u ON u.id=ef.upload_id WHERE ($1::text IS NULL OR u.owner_key=$1)`, [ownerScope()],
     )
   ).rows[0];
   return row as {

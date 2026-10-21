@@ -6,7 +6,7 @@ import { highlight } from "./search-excerpts";
 import { Button } from "@/components/ui/button";
 const key = "file-extract:guide:v1";
 const steps = [
-  { title: "Seus arquivos, em poucos passos", text: "Envie um ZIP ou PDF de até 4 MB. Para importar áudios e imagens, coloque esses arquivos dentro de um ZIP.", icon: Upload },
+  { title: "Seus arquivos, em poucos passos", text: "Envie um ZIP ou PDF de até 50 MB. Para importar áudios e imagens, coloque esses arquivos dentro de um ZIP.", icon: Upload },
   { title: "Explore sua biblioteca", text: "Depois da extração, os arquivos aparecem separados. Filtre por tipo, upload ou data. Abra pelo nome e use os ícones para visualizar ou baixar o original.", icon: Sparkles },
   { title: "Encontre a palavra e o contexto", text: "A busca procura no nome e no texto disponível. Você vê duas linhas acima e duas abaixo. Ao abrir o arquivo, o termo fica marcado. Experimente abaixo!", icon: FileSearch },
   { title: "Ouça, leia e descubra", text: "Nos áudios, aperte o play e ajuste o volume ou avance pela gravação. Nas imagens, use Extrair texto para fazer OCR. A transcrição de áudio depende de estar habilitada; ouvir não depende dela.", icon: Headphones },

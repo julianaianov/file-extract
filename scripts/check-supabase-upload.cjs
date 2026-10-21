@@ -4,6 +4,7 @@ const fs = require("fs"),
   ts = require("typescript"),
   Module = require("module");
 require("@next/env").loadEnvConfig(process.cwd());
+process.env.BILLING_ENABLED = "false";
 const previousResolve = Module._resolveFilename;
 Module._resolveFilename = function (name, parent, ...rest) {
   if (name.startsWith("@/")) name = path.join(process.cwd(), name.slice(2));

@@ -124,3 +124,26 @@
 [data-slot="dialog-overlay"].guide-overlay { background-color: rgba(2, 6, 14, 0.9); backdrop-filter: blur(6px); z-index: 100; }
 [data-slot="dialog-content"].guide-dialog { background: #101722; border-color: #456276; box-shadow: 0 28px 100px #000b; }
 .guide-dialog .guide-demo { background: #0b1320; }
+
+.seo-content { max-width: 1100px; margin: 0 auto; padding: 48px 28px 72px 90px; color: #b2c4d7; line-height: 1.8; }
+.seo-content h2, .public-guide h2 { color: #eaf1fb; font-size: clamp(20px,2.2vw,28px); font-weight: 650; line-height: 1.35; margin: 24px 0 16px; }
+.seo-content > p { max-width: 80ch; }
+.seo-guide-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin: 30px 0; }
+.seo-guide-grid article { padding: 24px; border: 1px solid #29384d; border-radius: 16px; background: #101722; }
+.seo-guide-grid h3 { color: #eaf1fb; font-weight: 650; font-size: 18px; line-height: 1.4; margin-bottom: 12px; }
+.seo-guide-grid p { font-size: 14px; margin-bottom: 16px; }
+.seo-guide-grid a:last-child, .public-guide aside a { color: #54def4; font-size: 14px; }
+.seo-content details { padding: 16px 0; border-bottom: 1px solid #29384d; }
+.seo-content summary { cursor: pointer; color: #eaf1fb; font-weight: 600; }
+.seo-content details p { margin-top: 10px; }
+.seo-cta { display: inline-block; background: #b4fa63; color: #14200c; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 650; margin-top: 28px; }
+.public-guide { max-width: 860px; margin: auto; padding: 32px 24px 80px; color: #b2c4d7; line-height: 1.85; }
+.public-guide nav { color: #54def4; margin-bottom: 40px; font-size: 14px; }
+.public-guide h1 { color: #eaf1fb; font-size: clamp(30px,5vw,48px); font-weight: 700; line-height: 1.15; margin: 16px 0 24px; }
+.public-guide .guide-lead { font-size: 19px; }
+.public-guide ol { list-style: decimal; padding-left: 24px; }
+.public-guide li { margin-bottom: 16px; padding-left: 8px; }
+.public-guide section { margin: 30px 0; }
+.public-guide aside { border-top: 1px solid #29384d; margin-top: 48px; }
+.public-guide aside a { display: block; margin-top: 14px; }
+@media(max-width:760px) { .seo-content { padding: 36px 20px 60px; } .seo-guide-grid { grid-template-columns: 1fr; } }

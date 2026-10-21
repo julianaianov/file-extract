@@ -1,3 +1,4 @@
+import { withWorkspace } from "@/lib/workspace";
 import { NextResponse } from 'next/server';
 import { getExtractedFile, updateContentText } from '@/lib/db';
 import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
@@ -7,7 +8,7 @@ import { readStoredFile } from '@/lib/storage';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const { fileId } = await request.json();
     if (!fileId) {
@@ -39,3 +40,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withWorkspace(handlePOST);

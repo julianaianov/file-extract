@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { X, Loader2, FileText, Mic, ImageIcon } from "lucide-react";
+import { downloadFile } from "@/lib/download-file";
 import { highlight } from "./search-excerpts";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -213,7 +214,8 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
 
       default:
         return (
-          <div className="flex h-64 items-center justify-center text-muted-foreground">
+          <div className="flex h-64 flex-col gap-4 items-center justify-center text-muted-foreground">
+            <Button variant="outline" onClick={() => void downloadFile(file.id, file.filename).catch(() => toast.error("Falha no download"))}>Baixar original</Button>
             <p>
               {content.message ||
                 "Visualizacao nao disponivel para este tipo de arquivo"}
@@ -243,12 +245,12 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
             className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200"
           >
             {content.warning}
-            <a
+            <button
               className="mt-2 block underline"
-              href={"/api/files/" + file.id + "?action=download"}
+              onClick={() => void downloadFile(file.id, file.filename).catch(() => toast.error("Falha no download"))}
             >
               Baixar original
-            </a>
+            </button>
           </div>
         )}
         <div ref={contentRef} className="min-w-0 [overflow-wrap:anywhere]">{renderContent()}</div>

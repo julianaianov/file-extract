@@ -1,3 +1,4 @@
+import { withWorkspace } from "@/lib/workspace";
 import { NextResponse } from "next/server";
 import {
   getExtractedFile,
@@ -17,7 +18,7 @@ function pdfWarning(metadata: string | null): string | undefined {
   }
 }
 type Context = { params: Promise<{ id: string }> };
-export async function GET(request: Request, context: Context) {
+async function handleGET(request: Request, context: Context) {
   try {
     const id = Number((await context.params).id),
       action = new URL(request.url).searchParams.get("action");
@@ -27,10 +28,12 @@ export async function GET(request: Request, context: Context) {
       return NextResponse.json(await getExtractedFilesByUpload(id));
     const file = await getExtractedFile(id);
     if (file) {
-      if (action === "stream") {
-        if (file.file_type !== "audio") return NextResponse.json({ error: "Arquivo sem audio" }, { status: 415 });
+      if (action === "stream" || action === "download") {
+        if (action === "stream" && file.file_type !== "audio") return NextResponse.json({ error: "Arquivo sem audio" }, { status: 415 });
         const buffer = await readStoredFile(file.file_path);
-        const headers: Record<string, string> = { "Content-Type": file.mime_type || "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "private, no-store" };
+        if (!request.headers.get("range") && buffer.length > 4 * 1024 * 1024) return NextResponse.json({ error: "Use o botão Baixar da biblioteca para arquivos grandes." }, { status: 413 });
+        const headers: Record<string, string> = { "Content-Type": file.mime_type || "application/octet-stream", "Accept-Ranges": "bytes", "Cache-Control": "private, no-store" };
+        if (action === "download") headers["Content-Disposition"] = "attachment; filename*=UTF-8\'\'" + encodeURIComponent(file.filename);
         const range = request.headers.get("range");
         if (range) {
           const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -40,21 +43,10 @@ export async function GET(request: Request, context: Context) {
             else if (match[2]) start = Math.max(0, buffer.length - Number(match[2]));
           }
           if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= buffer.length || (!match[1] && Number(match[2]) === 0)) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": "bytes */" + buffer.length } });
+          end = Math.min(end, start + 3 * 1024 * 1024 - 1);
           return new Response(new Uint8Array(buffer.subarray(start, end + 1)), { status: 206, headers: { ...headers, "Content-Range": "bytes " + start + "-" + end + "/" + buffer.length, "Content-Length": String(end - start + 1) } });
         }
         return new Response(new Uint8Array(buffer), { headers: { ...headers, "Content-Length": String(buffer.length) } });
-      }
-      if (action === "download") {
-        const buffer = await readStoredFile(file.file_path);
-        return new Response(new Uint8Array(buffer), {
-          headers: {
-            "Content-Type": file.mime_type || "application/octet-stream",
-            "Content-Disposition":
-              "attachment; filename*=UTF-8''" +
-              encodeURIComponent(file.filename),
-            "Content-Length": String(buffer.length),
-          },
-        });
       }
       if (action === "content") {
         if (file.file_type === "text")
@@ -63,7 +55,9 @@ export async function GET(request: Request, context: Context) {
             content: file.content_text || "",
             warning: pdfWarning(file.metadata),
           });
-        if (file.file_type === "image" || file.file_type === "audio") {
+        if (file.file_type === "audio") return NextResponse.json({ type: "audio", data: "/api/files/" + file.id + "?action=stream", transcription: file.transcription, transcriptionStatus: file.transcription_status });
+        if (file.file_type === "image" && Number(file.file_size) > 2 * 1024 * 1024) return NextResponse.json({ type: "other", message: "Imagem grande. Baixe o original para visualizar sem reduzir a qualidade." });
+        if (file.file_type === "image") {
           const buffer = await readStoredFile(file.file_path),
             mimeType = file.mime_type || "application/octet-stream";
           return NextResponse.json({
@@ -105,7 +99,7 @@ export async function GET(request: Request, context: Context) {
     );
   }
 }
-export async function DELETE(request: Request, context: Context) {
+async function handleDELETE(request: Request, context: Context) {
   try {
     const id = Number((await context.params).id);
     if (!Number.isSafeInteger(id) || id < 1)
@@ -128,3 +122,7 @@ export async function DELETE(request: Request, context: Context) {
     );
   }
 }
+
+export const GET = withWorkspace(handleGET);
+
+export const DELETE = withWorkspace(handleDELETE);

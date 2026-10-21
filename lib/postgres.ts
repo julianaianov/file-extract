@@ -9,6 +9,8 @@ export function getPool() {
     connectionString: process.env.DATABASE_URL,
     max: 1,
     connectionTimeoutMillis: 10000,
+    query_timeout: 60000,
+    statement_timeout: 55000,
     idleTimeoutMillis: 1000,
     maxLifetimeSeconds: 60,
     allowExitOnIdle: true,

@@ -1,3 +1,4 @@
+import { withWorkspace } from "@/lib/workspace";
 import { NextResponse } from 'next/server';
 import { getExtractedFile, updateTranscription, getPendingAudioFiles } from '@/lib/db';
 import { isSearchEnabled, updateExtractedFileInIndex } from '@/lib/search';
@@ -7,7 +8,7 @@ import path from 'path';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const { fileId } = await request.json();
 
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
 }
 
 // Endpoint para buscar arquivos pendentes de transcrição
-export async function GET() {
+async function handleGET(request: Request) {
   try {
     const pendingFiles = await getPendingAudioFiles();
     return NextResponse.json({
@@ -117,3 +118,7 @@ export async function GET() {
     );
   }
 }
+
+export const POST = withWorkspace(handlePOST);
+
+export const GET = withWorkspace(handleGET);

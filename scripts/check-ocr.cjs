@@ -3,6 +3,7 @@ const fs = require("fs"),
   { chromium } = require("@playwright/test"),
   assert = require("node:assert/strict");
 require("@next/env").loadEnvConfig(process.cwd());
+process.env.BILLING_ENABLED = "false";
 const url = process.argv[2],
   cli = require("./vercel-cli.cjs");
 function request(route, extra = []) {

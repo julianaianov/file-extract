@@ -2,6 +2,11 @@
 const nextConfig = {
   serverExternalPackages: ["pg", "pdf-parse", "tesseract.js"],
   outputFileTracingIncludes: {
+    "/api/upload/sessions/*": [
+      "./node_modules/pdf-parse/dist/**/*",
+      "./node_modules/pdfjs-dist/legacy/build/**/*",
+      "./node_modules/@napi-rs/canvas*/**/*",
+    ],
     "/api/upload": [
       "./node_modules/pdf-parse/dist/**/*",
       "./node_modules/pdfjs-dist/legacy/build/**/*",
@@ -28,6 +33,7 @@ const nextConfig = {
       ].map((name) => "./node_modules/" + name + "/**/*"),
     ],
   },
+  async headers() { return [{ source: "/api/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, nosnippet" }] }, { source: "/auth/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]; },
   images: { unoptimized: true },
   output: "standalone",
 };

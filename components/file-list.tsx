@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { downloadFile } from "@/lib/download-file";
 import { SearchExcerpts } from "./search-excerpts";
 import dynamic from "next/dynamic";
 import {
@@ -98,14 +99,7 @@ export function FileList({
     visible = files.slice((current - 1) * 12, current * 12);
   const download = async (file: ExtractedFile) => {
     try {
-      const r = await fetch("/api/files/" + file.id + "?action=download");
-      if (!r.ok) throw Error("Não foi possível baixar o arquivo.");
-      const url = URL.createObjectURL(await r.blob()),
-        link = document.createElement("a");
-      link.href = url;
-      link.download = file.filename;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await downloadFile(file.id, file.filename);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha no download.");
     }
@@ -331,7 +325,7 @@ export function FileList({
                   )}
                 </div>
               </div>
-              {file.file_type === "audio" && <div className="library-audio"><audio controls preload="none" aria-label={"Reproduzir " + file.filename} src={"/api/files/" + file.id + "?action=stream"} onPlay={event => { document.querySelectorAll("audio").forEach(audio => { if (audio !== event.currentTarget) audio.pause(); }); }} /><a href={"/api/files/" + file.id + "?action=download"} className="text-xs text-cyan-300 underline">Baixar original</a></div>}
+              {file.file_type === "audio" && <div className="library-audio"><audio controls preload="none" aria-label={"Reproduzir " + file.filename} src={"/api/files/" + file.id + "?action=stream"} onPlay={event => { document.querySelectorAll("audio").forEach(audio => { if (audio !== event.currentTarget) audio.pause(); }); }} /><button onClick={() => void download(file)} className="text-xs text-cyan-300 underline">Baixar original</button></div>}
               {file.search_keyword && <SearchExcerpts contexts={file.search_context ?? []} keyword={file.search_keyword} />}
               <div className="file-card-bottom">
                 <span className="file-origin" title={file.upload_name}>

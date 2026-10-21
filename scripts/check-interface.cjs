@@ -208,13 +208,10 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
     await expect(page.locator(".upload-feedback.error")).toContainText(
       "ZIP ou PDF",
     );
-    await input.setInputFiles({
-      name: "grande.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.alloc(4 * 1024 * 1024 + 1),
-    });
+    fs.writeFileSync("artifacts/oversized.pdf",Buffer.alloc(50 * 1024 * 1024 + 1));
+    await input.setInputFiles(path.resolve("artifacts/oversized.pdf"));
     await expect(page.locator(".upload-feedback.error")).toContainText(
-      "até 4 MB",
+      "até 50 MB",
     );
     await page.route("**/api/upload", async (route) => {
       await new Promise((r) => setTimeout(r, 400));
@@ -254,6 +251,13 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
         .locator(".orbit-two")
         .evaluate((el) => parseFloat(getComputedStyle(el).animationDuration)),
     ).toBeLessThan(0.001);
+    const sitemap = await context.request.get(base + "/sitemap.xml");
+    expect(sitemap.status()).toBe(200);
+    expect(await sitemap.text()).toContain("/guias/extrair-texto-pdf-online");
+    const guide = await context.request.get(base + "/guias/extrair-texto-pdf-online");
+    expect(guide.status()).toBe(200);
+    expect(await guide.text()).toContain("Como extrair texto de PDF online");
+    expect(await guide.text()).toContain('rel="canonical"');
     expect(errors).toEqual([]);
     console.log(
       "PASS interface: desktop/mobile, sem overflow, grade/lista, paginação, busca com debounce, filtros sincronizados, modal/teclado, validação/envio e redução de movimento",

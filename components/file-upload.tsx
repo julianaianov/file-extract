@@ -1,5 +1,6 @@
 "use client";
 
+import { uploadInParts } from "@/lib/upload-parts";
 import { useRef, useState } from "react";
 import {
   ArrowUpRight,
@@ -16,7 +17,7 @@ import { Button } from "@/components/ui/button";
 interface Props {
   onUploadComplete?: (result: { uploadId: number; totalFiles: number }) => void;
 }
-const maxBytes = 4 * 1024 * 1024;
+const maxBytes = 50 * 1024 * 1024;
 export function FileUpload({ onUploadComplete }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null),
@@ -40,7 +41,7 @@ export function FileUpload({ onUploadComplete }: Props) {
     }
     if (!candidate.size || candidate.size > maxBytes) {
       setFile(null);
-      setMessage("Escolha um arquivo de até 4 MB.");
+      setMessage("Escolha um arquivo de até 50 MB.");
       setPhase("error");
       return;
     }
@@ -64,7 +65,11 @@ export function FileUpload({ onUploadComplete }: Props) {
     setProgress(0);
     setMessage("");
     try {
-      const result = await new Promise<{
+      const accountResponse = await fetch("/api/billing");
+      if (!accountResponse.ok) throw new Error("Não foi possível verificar seu acesso. Tente novamente.");
+      const account = await accountResponse.json();
+      if (account.enabled && !account.freeAvailable && (!account.loggedIn || !account.tokenCost || account.tokens < account.tokenCost)) { window.dispatchEvent(new Event("billing-required")); throw new Error("Entre na sua conta e escolha uma assinatura ou tokens para continuar."); }
+      const result = file.size > 4 * 1024 * 1024 ? await uploadInParts(file, name.trim(), percent => { setProgress(percent); if (percent === 100) setPhase("processing"); }) : await new Promise<{
         uploadId: number;
         totalFiles: number;
         warnings?: string[];
@@ -90,14 +95,14 @@ export function FileUpload({ onUploadComplete }: Props) {
             reject(
               new Error(
                 xhr.status === 413
-                  ? "O arquivo excede o limite de envio. Use um arquivo de até 4 MB."
+                  ? "O arquivo excede o limite de envio. Use um arquivo de até 50 MB."
                   : "Não foi possível processar o arquivo. Tente novamente.",
               ),
             );
             return;
           }
           if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-          else reject(new Error(data.error || "Falha ao processar o arquivo."));
+          else { if ([401,402].includes(xhr.status)) window.dispatchEvent(new Event("billing-required")); reject(new Error(data.error || "Falha ao processar o arquivo.")); }
         };
         xhr.onerror = () =>
           reject(
@@ -111,6 +116,7 @@ export function FileUpload({ onUploadComplete }: Props) {
           );
         xhr.send(body);
       });
+      window.dispatchEvent(new Event("billing-updated"));
       setWarnings(result.warnings || []);
       setPhase("success");
       setMessage(
@@ -205,7 +211,7 @@ export function FileUpload({ onUploadComplete }: Props) {
             <span>
               <FileText size={12} /> PDF
             </span>
-            <span className="format-limit">até 4 MB</span>
+            <span className="format-limit">até 50 MB · envio em partes automático</span>
           </div>
         )}
         {busy && (
