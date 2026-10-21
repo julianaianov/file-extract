@@ -23,6 +23,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
+import { UploadLibrary, type LibraryUpload } from "@/components/upload-library";
 import { AccountPanel } from "@/components/account-panel";
 import { FirstVisitGuide } from "@/components/first-visit-guide";
 import { FileUpload } from "@/components/file-upload";
@@ -64,7 +65,9 @@ export default function Home() {
   Object.entries(filters).forEach(([key, value]) => {
     if (value) params.set(key, String(value));
   });
-  const filesUrl = "/api/files?" + params;
+  const filesUrl = filters.uploadId ? "/api/files?" + params : null;
+  const {data: uploads, error: uploadsError, isLoading: uploadsLoading} = useSWR<LibraryUpload[]>("/api/files?action=uploads", fetcher);
+  const selectedUpload = uploads?.find(u=>u.id===filters.uploadId);
   const {
     data: filesData,
     error: filesError,
@@ -72,7 +75,7 @@ export default function Home() {
     isValidating,
     mutate: refreshFiles,
   } = useSWR<{ files: ExtractedFile[] }>(filesUrl, fetcher, {
-    keepPreviousData: true,
+    keepPreviousData: false,
     dedupingInterval: 10000,
     refreshInterval: transcribingIds.length ? 5000 : 0,
   });
@@ -228,12 +231,12 @@ export default function Home() {
                 <span className="eyebrow-line" /> ORGANIZE. EXTRAIA. DESCUBRA.
               </div>
               <h1>
-                Seus arquivos ZIP e PDF.
+                Seus arquivos, organizados.
                 <br />
                 <span className="hero-highlight">Encontre o conteúdo.</span>
               </h1>
               <p>
-                Transforme ZIPs e PDFs em conteúdo acessível.
+                Guarde qualquer formato e explore o conteúdo disponível.
                 <br className="hidden sm:block" /> Envie, explore e encontre o
                 que realmente importa.
               </p>
@@ -277,6 +280,7 @@ export default function Home() {
             onCardClick={(target) => {
               setFilters({
                 ...emptyFilters,
+                uploadId: filters.uploadId,
                 fileType: target?.type || "",
                 transcriptionStatus: target?.transcriptionStatus || null,
               });
@@ -299,7 +303,9 @@ export default function Home() {
                 </span>
               </div>
               <FileUpload
-                onUploadComplete={() => {
+                onUploadComplete={({uploadId}) => {
+                  setFilters({...emptyFilters,uploadId});
+                  setTab("files");
                   refresh();
                   toast.success("Seu arquivo já está na biblioteca.");
                 }}
@@ -320,7 +326,7 @@ export default function Home() {
                 </span>
                 <div>
                   <h3>Envie seu arquivo</h3>
-                  <p>ZIP ou PDF, direto do seu dispositivo.</p>
+                  <p>Qualquer formato, direto do seu dispositivo.</p>
                 </div>
                 <span className="step-number">01</span>
               </div>
@@ -362,6 +368,8 @@ export default function Home() {
                 {stats?.totalFiles ?? "—"} arquivos no workspace
               </span>
             </div>
+            {filters.uploadId ? <>
+            <div className="flex flex-wrap items-center gap-3 border-b border-border px-6 py-4"><Button variant="outline" onClick={()=>setFilters(emptyFilters)}>← Todos os envios</Button><strong className="min-w-0 break-all text-cyan-200">{selectedUpload?.original_name || "Envio selecionado"}</strong><span className="text-xs text-muted-foreground">Mostrando somente este envio</span></div>
             <div
               className="library-tabs"
               role="tablist"
@@ -416,7 +424,7 @@ export default function Home() {
                     aria-busy={isValidating}
                   >
                     <FileList
-                      files={filesData?.files || []}
+                      files={(filesData?.files || []).filter(f=>f.upload_id===filters.uploadId)}
                       isLoading={filesLoading}
                       onTranscribe={transcribe}
                       transcribingIds={transcribingIds}
@@ -433,9 +441,10 @@ export default function Home() {
                 aria-labelledby="context-tab"
                 className="library-body"
               >
-                <ContextSearch />
+                <ContextSearch key={filters.uploadId} uploadId={filters.uploadId} />
               </div>
             )}
+            </> : uploadsError ? <div role="alert" className="error-panel"><p>Não foi possível carregar os envios.</p><Button onClick={refresh}>Tentar novamente</Button></div> : <UploadLibrary uploads={uploads || []} loading={uploadsLoading} onSelect={uploadId=>{setFilters({...emptyFilters,uploadId});setTab("files")}}/>}
           </section>
           <footer className="workspace-footer">
             <span className="flex items-center gap-2">

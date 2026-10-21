@@ -6,8 +6,8 @@ import { highlight } from "./search-excerpts";
 import { Button } from "@/components/ui/button";
 const key = "file-extract:guide:v1";
 const steps = [
-  { title: "Seus arquivos, em poucos passos", text: "Envie um ZIP ou PDF de até 50 MB. Para importar áudios e imagens, coloque esses arquivos dentro de um ZIP.", icon: Upload },
-  { title: "Explore sua biblioteca", text: "Depois da extração, os arquivos aparecem separados. Filtre por tipo, upload ou data. Abra pelo nome e use os ícones para visualizar ou baixar o original.", icon: Sparkles },
+  { title: "Seus arquivos, em poucos passos", text: "Envie qualquer formato de até 250 MB, incluindo áudio e imagem diretamente. Arquivos grandes são transferidos em partes automaticamente.", icon: Upload },
+  { title: "Explore sua biblioteca", text: "Selecione um envio na biblioteca para ver apenas seus arquivos. Dentro dele, filtre por tipo, palavra ou data. Volte a Todos os envios para trocar de pacote.", icon: Sparkles },
   { title: "Encontre a palavra e o contexto", text: "A busca procura no nome e no texto disponível. Você vê duas linhas acima e duas abaixo. Ao abrir o arquivo, o termo fica marcado. Experimente abaixo!", icon: FileSearch },
   { title: "Ouça, leia e descubra", text: "Nos áudios, aperte o play e ajuste o volume ou avance pela gravação. Nas imagens, use Extrair texto para fazer OCR. A transcrição de áudio depende de estar habilitada; ouvir não depende dela.", icon: Headphones },
 ];
@@ -26,7 +26,7 @@ export function FirstVisitGuide() {
           <div className="guide-symbol"><Icon size={30} /></div>
           <DialogTitle className="text-xl sm:text-2xl">{current.title}</DialogTitle>
           <DialogDescription className="guide-description">{current.text}</DialogDescription>
-          {step === 0 && <div className="guide-demo"><Upload size={28} /><strong>seus-arquivos.zip ou documento.pdf</strong><span>Escolha o arquivo → clique em Extrair arquivo → abra a biblioteca</span></div>}
+          {step === 0 && <div className="guide-demo"><Upload size={28} /><strong>ZIP, PDF, texto, áudio, imagem e outros formatos</strong><span>Escolha o arquivo → clique em Extrair arquivo → abra a biblioteca</span></div>}
           {step === 1 && <div className="guide-demo"><span className="guide-chips">Texto e PDF · Áudio · Imagens</span><strong>Uma biblioteca, vários formatos</strong><span>Visualize o conteúdo ou baixe o original quando precisar.</span></div>}
           {step === 2 && <div className="guide-demo"><label className="w-full text-left text-xs">Experimente buscar<input aria-label="Experimentar busca no tutorial" className="guide-input" value={demo} onChange={e => setDemo(e.target.value)} placeholder="Digite projeto" /></label><p className="w-full text-left">Reunião de planejamento<br />Equipe reunida hoje<br />{highlight("O projeto come\u00e7a amanh\u00e3.", demo)}<br />Responsáveis definidos<br />Próxima revisão na sexta</p></div>}
           {step === 3 && <div className="guide-demo"><Headphones size={30} /><strong>Play direto na biblioteca</strong><span>Use a barra do reprodutor para pausar, avançar e controlar o volume. Se o formato não tocar no navegador, baixe o original.</span></div>}

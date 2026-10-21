@@ -7,7 +7,7 @@ import {
   deleteUpload,
   deleteExtractedFile,
 } from "@/lib/db";
-import { readStoredFile, deleteStoredFile } from "@/lib/storage";
+import { readStoredFile, readStoredRange, storedFileSize, deleteStoredFile } from "@/lib/storage";
 export const runtime = "nodejs";
 function pdfWarning(metadata: string | null): string | undefined {
   try {
@@ -30,23 +30,23 @@ async function handleGET(request: Request, context: Context) {
     if (file) {
       if (action === "stream" || action === "download") {
         if (action === "stream" && file.file_type !== "audio") return NextResponse.json({ error: "Arquivo sem audio" }, { status: 415 });
-        const buffer = await readStoredFile(file.file_path);
-        if (!request.headers.get("range") && buffer.length > 4 * 1024 * 1024) return NextResponse.json({ error: "Use o botão Baixar da biblioteca para arquivos grandes." }, { status: 413 });
+        const size = await storedFileSize(file.file_path);
+        if (!request.headers.get("range") && size > 4 * 1024 * 1024) return NextResponse.json({ error: "Use o botão Baixar da biblioteca para arquivos grandes." }, { status: 413 });
         const headers: Record<string, string> = { "Content-Type": file.mime_type || "application/octet-stream", "Accept-Ranges": "bytes", "Cache-Control": "private, no-store" };
         if (action === "download") headers["Content-Disposition"] = "attachment; filename*=UTF-8\'\'" + encodeURIComponent(file.filename);
         const range = request.headers.get("range");
         if (range) {
           const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-          let start = 0, end = buffer.length - 1;
+          let start = 0, end = size - 1;
           if (match) {
             if (match[1]) { start = Number(match[1]); if (match[2]) end = Math.min(Number(match[2]), end); }
-            else if (match[2]) start = Math.max(0, buffer.length - Number(match[2]));
+            else if (match[2]) start = Math.max(0, size - Number(match[2]));
           }
-          if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= buffer.length || (!match[1] && Number(match[2]) === 0)) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": "bytes */" + buffer.length } });
+          if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= size || (!match[1] && Number(match[2]) === 0)) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": "bytes */" + size } });
           end = Math.min(end, start + 3 * 1024 * 1024 - 1);
-          return new Response(new Uint8Array(buffer.subarray(start, end + 1)), { status: 206, headers: { ...headers, "Content-Range": "bytes " + start + "-" + end + "/" + buffer.length, "Content-Length": String(end - start + 1) } });
+          return new Response(new Uint8Array(await readStoredRange(file.file_path, start, end)), { status: 206, headers: { ...headers, "Content-Range": "bytes " + start + "-" + end + "/" + size, "Content-Length": String(end - start + 1) } });
         }
-        return new Response(new Uint8Array(buffer), { headers: { ...headers, "Content-Length": String(buffer.length) } });
+        return new Response(new Uint8Array(await readStoredRange(file.file_path, 0, size - 1)), { headers: { ...headers, "Content-Length": String(size) } });
       }
       if (action === "content") {
         if (file.file_type === "text")

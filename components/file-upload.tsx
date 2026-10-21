@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 interface Props {
   onUploadComplete?: (result: { uploadId: number; totalFiles: number }) => void;
 }
-const maxBytes = 50 * 1024 * 1024;
+const maxBytes = 250 * 1024 * 1024;
 export function FileUpload({ onUploadComplete }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null),
@@ -33,15 +33,9 @@ export function FileUpload({ onUploadComplete }: Props) {
   const select = (candidate?: File) => {
     if (!candidate) return;
     setWarnings([]);
-    if (!/\.(zip|pdf)$/i.test(candidate.name)) {
-      setFile(null);
-      setMessage("Escolha um arquivo ZIP ou PDF.");
-      setPhase("error");
-      return;
-    }
     if (!candidate.size || candidate.size > maxBytes) {
       setFile(null);
-      setMessage("Escolha um arquivo de até 50 MB.");
+      setMessage("Escolha um arquivo de até 250 MB.");
       setPhase("error");
       return;
     }
@@ -95,7 +89,7 @@ export function FileUpload({ onUploadComplete }: Props) {
             reject(
               new Error(
                 xhr.status === 413
-                  ? "O arquivo excede o limite de envio. Use um arquivo de até 50 MB."
+                  ? "O arquivo excede o limite de envio. Use um arquivo de até 250 MB."
                   : "Não foi possível processar o arquivo. Tente novamente.",
               ),
             );
@@ -155,9 +149,8 @@ export function FileUpload({ onUploadComplete }: Props) {
         <input
           ref={input}
           type="file"
-          accept=".zip,.pdf"
           className="sr-only"
-          aria-label="Selecionar arquivo ZIP ou PDF"
+          aria-label="Selecionar arquivo"
           disabled={busy}
           onChange={(e) => select(e.target.files?.[0])}
         />
@@ -168,7 +161,7 @@ export function FileUpload({ onUploadComplete }: Props) {
           ) : phase === "success" ? (
             <Check size={31} />
           ) : file ? (
-            file.name.toLowerCase().endsWith(".pdf") ? (
+            !file.name.toLowerCase().endsWith(".zip") ? (
               <FileText size={31} />
             ) : (
               <Archive size={31} />
@@ -211,7 +204,7 @@ export function FileUpload({ onUploadComplete }: Props) {
             <span>
               <FileText size={12} /> PDF
             </span>
-            <span className="format-limit">até 50 MB · envio em partes automático</span>
+            <span className="format-limit">Todos os formatos · até 250 MB · envio em partes automático</span>
           </div>
         )}
         {busy && (
@@ -299,7 +292,7 @@ export function FileUpload({ onUploadComplete }: Props) {
       <div className="upload-note">
         <ShieldCheck size={13} />
         <span>
-          ZIPs organizados. PDFs com texto pesquisável. Tudo em um lugar.
+          Qualquer formato. ZIPs descompactados; texto, áudio e imagens com recursos próprios.
         </span>
       </div>
     </div>

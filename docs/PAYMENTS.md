@@ -1,10 +1,10 @@
 # Cobrança e arquivos grandes
 
 ## Situação
-O código suporta envio fragmentado de PDFs/ZIPs até 50 MB, login Supabase, um envio gratuito, compra de tokens e assinatura que concede tokens por fatura paga. A cobrança fica desligada enquanto BILLING_ENABLED não for true. Oferta inicial escolhida: R$29,90 por mês com 100 tokens; pacote avulso de 20 tokens por R$14,90; 1 token por envio. Créditos acumulam sem expiração. Stripe configurada em modo de teste.
+O código suporta envio fragmentado de qualquer formato até 250 MB, login Supabase, um envio gratuito, compra de tokens e assinatura que concede tokens por fatura paga. A cobrança fica desligada enquanto BILLING_ENABLED não for true. Oferta inicial escolhida: R$29,90 por mês com 100 tokens; pacote avulso de 20 tokens por R$14,90; 1 token por envio. Créditos acumulam sem expiração. Stripe configurada em modo de teste.
 
 ## Regras a definir antes da ativação
-- Um documento corresponde a um envio (PDF/ZIP); fragmentos e arquivos internos do ZIP não consomem créditos adicionais.
+- Um documento corresponde a um envio de um arquivo; fragmentos e arquivos internos do ZIP não consomem créditos adicionais.
 - Assinatura: R$29,90 mensais / 100 tokens por fatura paga.
 - Pacote avulso: R$14,90 / 20 tokens. Custo: 1 token por envio.
 - O código atual acumula os tokens concedidos a cada pagamento, sem expiração. O cancelamento da assinatura impede novas concessões; créditos existentes permanecem.
@@ -12,7 +12,7 @@ O código suporta envio fragmentado de PDFs/ZIPs até 50 MB, login Supabase, um 
 - Confirmar e atribuir os uploads anteriores a uma conta administradora antes de ativar: os registros antigos com owner_key nulo não ficam públicos no modo de contas.
 
 ## Configuração
-1. Rodar npm run db:setup, incluindo scripts/003-accounts-billing.sql.
+1. Rodar npm run db:setup, incluindo scripts/003-accounts-billing.sql e scripts/004-large-files.sql.
 2. Configurar Supabase Auth para permitir e-mail/senha e cadastrar o domínio de produção e /auth/callback nos URLs de redirecionamento. Configure SMTP para entrega dos e-mails de confirmação.
 3. Usar uma chave Stripe de teste para validar. Criar um preço de compra única e um preço recorrente. Os valores exibidos vêm da Stripe.
 4. Configurar as variáveis privadas no servidor e na Vercel:
@@ -33,7 +33,7 @@ O código suporta envio fragmentado de PDFs/ZIPs até 50 MB, login Supabase, um 
 8. Reembolsos e disputas precisam ser acompanhados no painel Stripe; esta versão não retira automaticamente tokens já concedidos em caso de estorno financeiro.
 
 ## Limites técnicos
-As partes têm no máximo 3 MB e expiram após uma hora. A primeira parte inicia uma sessão vinculada ao visitante/conta. No máximo dois envios podem estar pendentes por identidade. Repetir uma parte substitui a mesma parte; repetir a finalização concluída retorna o resultado anterior. Falhas de extração devolvem a reserva de gratuidade/tokens. O limite de descompactação continua 1000 arquivos e 100 MB. O processamento deve caber no tempo da função Vercel (60 segundos); processamento de documentos muito complexos pode exigir uma fila com worker.
+As partes têm no máximo 3 MB e expiram após uma hora. A primeira parte inicia uma sessão vinculada ao visitante/conta. No máximo dois envios podem estar pendentes por identidade. Repetir uma parte substitui a mesma parte; repetir a finalização concluída retorna o resultado anterior. Falhas de extração devolvem a reserva de gratuidade/tokens. O limite de descompactação é de 1000 arquivos e 250 MB. O processamento deve caber no tempo da função Vercel (60 segundos para envio direto e 300 segundos para finalizar envios em partes); processamento de documentos muito complexos pode exigir uma fila com worker.
 
 Os áudios e downloads aceitam leitura parcial. O botão de download monta partes no navegador para contornar o limite de resposta da Vercel. Os arquivos originais permanecem íntegros.
 
@@ -41,5 +41,8 @@ Uma função interrompida abruptamente pode deixar uma sessão em processamento.
 
 ## Verificação
 - scripts/check-chunks-billing.cjs: bytes originais de PDF maior que 4 MB, isolamento, envio incompleto, finalização repetida, limite gratuito concorrente e webhook assinado com eventos repetidos.
+- scripts/check-large-formats.cjs: formatos arbitrários e 51 MB em partes, bytes integrais e downloads entre limites de partes; --quick testa a finalização com 5 MB.
 - scripts/check-audio-stream.cjs: intervalos de áudio.
 - scripts/check-interface.cjs: interface, busca e tutorial.
+
+Envios aceitam qualquer extensão até 250 MB. Arquivos maiores que 4 MB usam partes de 3 MB; as partes não geram cobranças adicionais. O armazenamento segmentado requer scripts/004-large-files.sql. ZIPs mantêm o limite de 1000 itens e 250 MB descompactados. Formatos sem leitor são preservados para download. A biblioteca abre por envio e os filtros mostram somente seus itens.

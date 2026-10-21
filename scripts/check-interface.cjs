@@ -2,6 +2,7 @@ const fs = require("fs"),
   path = require("path"),
   { spawnSync } = require("child_process");
 const { chromium, expect } = require("@playwright/test");
+expect.configure({timeout:30000});
 const base = process.argv[2] || "http://127.0.0.1:3000",
   cli = require("./vercel-cli.cjs");
 (async () => {
@@ -68,6 +69,8 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
       errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(base, { waitUntil: "networkidle", timeout: 120000 });
+    await page.waitForTimeout(3000);
+    console.log("UI entrada:",page.url(),await page.title(),"erros:",JSON.stringify(errors));
     await expect(page.getByRole("dialog")).toContainText("Seus arquivos, em poucos passos");
     await page.getByRole("button", { name: "Etapa 3", exact: true }).click();
     await expect(page.getByRole("dialog").locator("mark")).toHaveText("projeto");
@@ -131,10 +134,12 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
       }
       if (action === "uploads") {
         await route.fulfill({
-          json: [{ id: 1, original_name: "Documentos de teste" }],
+          json: [{ id: 1, original_name: "Documentos de teste",total_files:26,file_size:3000,upload_date:"2026-10-21",status:"completed" },{id:2,original_name:"Outro pacote",total_files:1,file_size:10,upload_date:"2026-10-21",status:"completed"}],
         });
         return;
       }
+      expect(u.searchParams.get("uploadId")).toBeTruthy();
+      if(u.searchParams.get("uploadId")==="2") { await route.fulfill({json:{files:[{...fixtures[1],id:100,upload_id:2,filename:"Somente outro pacote.txt"}]}});return; }
       const keyword = u.searchParams.get("keyword") || "",
         type = u.searchParams.get("fileType");
       if (keyword) queries.push(keyword);
@@ -150,6 +155,8 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
     wav.write("RIFF"); wav.writeUInt32LE(wav.length - 8, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(16000, 40);
     await page.route("**/api/files/*", route => new URL(route.request().url()).searchParams.get("action") === "stream" ? route.fulfill({ contentType: "audio/wav", body: wav }) : route.fulfill({ json: { type: "text", content: "Conte\u00fado completo para verificar a pr\u00e9-visualiza\u00e7\u00e3o. Documento 25 encontrado." } }));
     await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator(".file-card")).toHaveCount(0);
+    await page.getByRole("button", {name:/Documentos de teste/}).click();
     await expect(page.locator(".file-card")).toHaveCount(12);
     const player = page.locator("audio").first();
     await expect(player).toHaveAttribute("controls", "");
@@ -199,19 +206,17 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
       }),
     ).toBeVisible();
     await page.getByRole("tab", { name: /Arquivos/ }).click();
-    const input = page.getByLabel("Selecionar arquivo ZIP ou PDF");
+    const input = page.getByLabel("Selecionar arquivo");
     await input.setInputFiles({
       name: "arquivo.exe",
       mimeType: "application/octet-stream",
       buffer: Buffer.from("invalid"),
     });
-    await expect(page.locator(".upload-feedback.error")).toContainText(
-      "ZIP ou PDF",
-    );
-    fs.writeFileSync("artifacts/oversized.pdf",Buffer.alloc(50 * 1024 * 1024 + 1));
+    await expect(page.getByRole("button",{name:"Extrair arquivo",exact:true})).toBeVisible();
+    fs.writeFileSync("artifacts/oversized.pdf",Buffer.alloc(250 * 1024 * 1024 + 1));
     await input.setInputFiles(path.resolve("artifacts/oversized.pdf"));
     await expect(page.locator(".upload-feedback.error")).toContainText(
-      "até 50 MB",
+      "até 250 MB",
     );
     await page.route("**/api/upload", async (route) => {
       await new Promise((r) => setTimeout(r, 400));
@@ -231,6 +236,17 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
       page.getByText("1 arquivo na sua biblioteca.", { exact: true }),
     ).toBeVisible({ timeout: 10000 });
     await page.getByRole("button", { name: "Visualização em grade" }).click();
+    await page.getByRole("button",{name:/Todos os envios/}).click();
+    await expect(page.locator(".file-card")).toHaveCount(0);
+    await page.getByRole("button",{name:/Outro pacote/}).click();
+    await expect(page.locator(".file-card")).toHaveCount(1);
+    await expect(page.getByRole("button",{name:"Abrir Somente outro pacote.txt",exact:true})).toBeVisible();
+    await expect(page.getByRole("button",{name:"Abrir Documento 02.pdf",exact:true})).toHaveCount(0);
+    await page.getByRole("textbox",{name:"Buscar arquivos",exact:true}).fill("outro");
+    await page.waitForTimeout(500);
+    await page.getByRole("button",{name:"Limpar filtros",exact:true}).click();
+    await expect(page.getByText("Mostrando somente este envio")).toBeVisible();
+    await expect(page.locator(".file-card")).toHaveCount(1);
     for (const width of [1440, 768, 390, 360]) {
       await page.setViewportSize({ width, height: 900 });
       await page.waitForTimeout(150);

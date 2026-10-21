@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import useSWR from "swr";
 import {
   Search,
   SlidersHorizontal,
@@ -44,18 +43,11 @@ const types = [
   { value: "text", label: "Texto e PDF", icon: FileText },
   { value: "audio", label: "Áudio", icon: AudioLines },
   { value: "image", label: "Imagens", icon: ImageIcon },
+  { value: "other", label: "Outros", icon: Layers3 },
 ];
-const fetchUploads = async (url: string) => {
-  const r = await fetch(url);
-  if (!r.ok) throw Error("Falha ao carregar uploads");
-  return r.json();
-};
 export function SearchFilters({ filters, onSearch, onDeleteUpload }: Props) {
   const [advanced, setAdvanced] = useState(false),
     [draft, setDraft] = useState(filters.keyword);
-  const { data: uploads = [] } = useSWR<
-    Array<{ id: number; original_name: string }>
-  >("/api/files?action=uploads", fetchUploads, { dedupingInterval: 15000 });
   useEffect(() => setDraft(filters.keyword), [filters.keyword]);
   useEffect(() => {
     if (draft === filters.keyword) return;
@@ -65,7 +57,7 @@ export function SearchFilters({ filters, onSearch, onDeleteUpload }: Props) {
     );
     return () => clearTimeout(timer);
   }, [draft, filters, onSearch]);
-  const active = Object.values(filters).some(Boolean);
+  const active = Object.entries(filters).some(([key,value])=>key!=="uploadId" && Boolean(value));
   const update = (value: Partial<SearchFilters>) =>
     onSearch({ ...filters, keyword: draft, ...value });
   return (
@@ -98,21 +90,6 @@ export function SearchFilters({ filters, onSearch, onDeleteUpload }: Props) {
           <SlidersHorizontal size={16} />
           <span>Filtros</span>
         </Button>
-        <select
-          aria-label="Filtrar por upload"
-          className="upload-select"
-          value={filters.uploadId ?? ""}
-          onChange={(e) =>
-            update({ uploadId: e.target.value ? Number(e.target.value) : null })
-          }
-        >
-          <option value="">Todos os uploads</option>
-          {uploads.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.original_name}
-            </option>
-          ))}
-        </select>
       </form>
       <div className="type-filter-row">
         <div className="type-filters">
@@ -135,7 +112,7 @@ export function SearchFilters({ filters, onSearch, onDeleteUpload }: Props) {
             className="clear-filters"
             onClick={() => {
               setDraft("");
-              onSearch(emptyFilters);
+              onSearch({...emptyFilters, uploadId: filters.uploadId});
             }}
           >
             <X size={13} /> Limpar filtros

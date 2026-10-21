@@ -1,14 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ContextModal } from "./context-modal";
-
-interface Upload {
-  id: number;
-  original_name: string;
-}
 
 interface Line {
   num: number;
@@ -29,20 +24,12 @@ interface ApiResponse {
   error?: string;
 }
 
-export function ContextSearch() {
-  const [uploads, setUploads] = useState<Upload[]>([]);
-  const [uploadId, setUploadId] = useState<number | "">("");
+export function ContextSearch({uploadId}: {uploadId:number}) {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetch("/api/files?action=uploads")
-      .then((r) => r.json())
-      .then((arr) => Array.isArray(arr) && setUploads(arr))
-      .catch(() => {});
-  }, []);
 
   const search = async () => {
     if (!q.trim()) return;
@@ -51,7 +38,7 @@ export function ContextSearch() {
     try {
       const p = new URLSearchParams();
       p.set("q", q.trim());
-      p.set("window", "5");
+      p.set("window", "2");
       if (uploadId) p.set("uploadId", String(uploadId));
       const res = await fetch(`/api/context?${p.toString()}`);
       const json = (await res.json()) as ApiResponse;
@@ -84,20 +71,6 @@ export function ContextSearch() {
             onKeyDown={(e) => e.key === "Enter" && search()}
           />
         </div>
-        <select
-          className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground"
-          value={uploadId}
-          onChange={(e) =>
-            setUploadId(e.target.value ? Number(e.target.value) : "")
-          }
-        >
-          <option value="">Todos os uploads</option>
-          {uploads.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.id} - {u.original_name}
-            </option>
-          ))}
-        </select>
         <Button onClick={search} disabled={loading || !q.trim()}>
           {loading ? "Buscando..." : "Buscar"}
         </Button>

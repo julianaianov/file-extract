@@ -4,8 +4,8 @@ import { getPool } from "@/lib/postgres";
 export const runtime = "nodejs";
 export const POST = withWorkspace(async request => {
  const input = await request.json();
- if (typeof input.filename !== "string" || !/\.(pdf|zip)$/i.test(input.filename) || input.filename.length > 250 || !Number.isSafeInteger(input.size) || input.size < 1 || input.size > 50 * 1024 * 1024)
-  return Response.json({ error: "Envie um ZIP ou PDF de até 50 MB" }, { status: 400 });
+ if (typeof input.filename !== "string" || !input.filename.trim() || input.filename.length > 250 || !Number.isSafeInteger(input.size) || input.size < 1 || input.size > 250 * 1024 * 1024)
+  return Response.json({ error: "Envie um arquivo de até 250 MB" }, { status: 400 });
  const client = await getPool().connect(), owner = workspace().owner;
  try {
   await client.query("BEGIN");

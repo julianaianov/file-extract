@@ -8,7 +8,7 @@ import {
   deleteUpload,
   type ExtractedFile,
 } from "@/lib/db";
-import { saveStoredFile } from "@/lib/storage";
+import { saveStoredFile, saveSessionFile } from "@/lib/storage";
 import { extractPdfText } from "@/lib/pdf";
 import AdmZip from "adm-zip";
 import path from "path";
@@ -16,8 +16,8 @@ import { randomUUID } from "crypto";
 
 
 
-const MAX_BYTES = 50 * 1024 * 1024;
-const MAX_EXTRACTED_BYTES = 100 * 1024 * 1024;
+const MAX_BYTES = 250 * 1024 * 1024;
+const MAX_EXTRACTED_BYTES = 250 * 1024 * 1024;
 function fileInfo(name: string): {
   type: ExtractedFile["file_type"];
   mime: string;
@@ -66,29 +66,28 @@ function fileInfo(name: string): {
   if (image[ext]) return { type: "image", mime: image[ext] };
   return { type: "other", mime: "application/octet-stream" };
 }
+export function processingBytes(filename:string, size:number) {
+ const ext=path.extname(filename).toLowerCase();
+ return ext===".zip" || ext===".pdf" ? size : fileInfo(filename).type==="text" ? Math.min(size,4000000) : 0;
+}
 export async function processUpload(request: Request) {
+ const form = await request.formData(), file = form.get("file");
+ if (!(file instanceof File)) return NextResponse.json({error:"Nenhum arquivo enviado"},{status:400});
+ if (!file.size || file.size > MAX_BYTES) return NextResponse.json({error:"Envie um arquivo de até 250 MB"},{status:413});
+ return processBuffer(Buffer.from(await file.arrayBuffer()), file.name, form.get("customName"));
+}
+export async function processBuffer(buffer: Buffer, filename: string, customName: unknown, sessionId?: string, sourceSize = buffer.length) {
+ const file = {name: filename, size: sourceSize};
+ if (!filename.trim() || filename.length>250 || filename.includes("\u0000")) return NextResponse.json({error:"Nome de arquivo inválido"},{status:400});
   let uploadId: number | undefined;
   let charge: string | null = null;
   try {
-    const form = await request.formData(),
-      file = form.get("file");
-    if (!(file instanceof File))
-      return NextResponse.json(
-        { error: "Nenhum arquivo enviado" },
-        { status: 400 },
-      );
     const extension = path.extname(file.name).toLowerCase();
-    if (![".zip", ".pdf"].includes(extension))
-      return NextResponse.json(
-        { error: "Selecione um arquivo ZIP ou PDF" },
-        { status: 400 },
-      );
     if (!file.size || file.size > MAX_BYTES)
       return NextResponse.json(
-        { error: "O arquivo deve ter entre 1 byte e 50 MB" },
+        { error: "O arquivo deve ter entre 1 byte e 250 MB" },
         { status: 413 },
       );
-    const buffer = Buffer.from(await file.arrayBuffer());
     if (
       extension === ".pdf" &&
       !buffer.subarray(0, 1024).includes(Buffer.from("%PDF-"))
@@ -122,13 +121,12 @@ export async function processUpload(request: Request) {
         entries.reduce((n, e) => n + e.header.size, 0) > MAX_EXTRACTED_BYTES
       )
         return NextResponse.json(
-          { error: "ZIP excede o limite de 1000 arquivos ou 100 MB extraídos" },
+          { error: "ZIP excede o limite de 1000 arquivos ou 250 MB extraídos" },
           { status: 413 },
         );
     }
     const uniqueId = randomUUID(),
-      savedFilename = uniqueId + extension,
-      customName = form.get("customName");
+      savedFilename = uniqueId + extension;
     charge = await reserveExtraction();
     uploadId = await createUpload(
       savedFilename,
@@ -138,7 +136,8 @@ export async function processUpload(request: Request) {
       file.size,
     );
     await attachExtraction(charge, uploadId);
-    await saveStoredFile("uploads/" + savedFilename, uploadId, buffer);
+    if(sessionId) await saveSessionFile("uploads/" + savedFilename, uploadId, sessionId);
+    else await saveStoredFile("uploads/" + savedFilename, uploadId, buffer);
     const extracted = entries
       ? entries.map((entry, index) => ({
           name: path.posix.basename(entry.entryName.replaceAll("\\", "/")),
@@ -152,7 +151,7 @@ export async function processUpload(request: Request) {
       const data = entry.data(),
         info = fileInfo(entry.name);
       extractedBytes += data.length;
-      if (extractedBytes > MAX_EXTRACTED_BYTES)
+      if (entries && extractedBytes > MAX_EXTRACTED_BYTES)
         throw new Error("Limite de descompactação excedido");
       let text: string | null = null,
         warning: string | undefined,
@@ -164,17 +163,18 @@ export async function processUpload(request: Request) {
         status = result.status;
       } else if (info.type === "text")
         text = data
-          .toString("utf8")
+          .subarray(0, 4000000).toString("utf8")
           .replace(/\u0000/g, "")
           .slice(0, 1000000);
-      const key = "extracted/" + entry.key;
-      await saveStoredFile(key, uploadId, data);
+      if(info.type === "text" && info.mime !== "application/pdf" && ((entries ? data.length : file.size) > 4000000 || (text?.length || 0) === 1000000)) warning = "A busca e a prévia incluem o primeiro milhão de caracteres. Baixe o original para acessar todo o conteúdo.";
+      const key = entries ? "extracted/" + entry.key : "uploads/" + savedFilename;
+      if (entries) await saveStoredFile(key, uploadId, data);
       const id = await createExtractedFile(
         uploadId,
         entry.name,
         key,
         info.type,
-        data.length,
+        entries ? data.length : file.size,
         info.mime,
         text,
         info.type === "audio" ? "pending" : "not_applicable",

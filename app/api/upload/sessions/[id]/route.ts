@@ -1,8 +1,8 @@
 import { withWorkspace, workspace } from "@/lib/workspace";
 import { query, getPool } from "@/lib/postgres";
-import { processUpload } from "@/lib/process-upload";
+import { processBuffer, processingBytes } from "@/lib/process-upload";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 type Context = { params: Promise<{ id: string }> };
 const valid = (id: string) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id);
 export const PUT = withWorkspace(async (request: Request, context: Context) => {
@@ -30,15 +30,17 @@ export const POST = withWorkspace(async (request: Request, context: Context) => 
   const previous = (await query("SELECT state,result FROM public.upload_sessions WHERE id=$1 AND owner_key=$2 AND expires_at > now()", [id, owner])).rows[0];
   return previous?.state === "completed" ? Response.json(previous.result) : Response.json({ error: "Envio expirado, em processamento ou já encerrado" }, { status: 409 });
  }
- const chunks = (await query("SELECT part,contents FROM public.upload_chunks WHERE session_id=$1 ORDER BY part", [id])).rows;
- if (chunks.length !== claimed.chunk_count) { await query("UPDATE public.upload_sessions SET state='pending' WHERE id=$1", [id]); return Response.json({ error: "Faltam partes do arquivo. Tente novamente." }, { status: 409 }); }
- const bytes = Buffer.concat(chunks.map(c => c.contents));
- if (bytes.length !== claimed.file_size) { await query("UPDATE public.upload_sessions SET state='error' WHERE id=$1", [id]); return Response.json({ error: "Arquivo incompleto" }, { status: 422 }); }
  try {
-  const form = new FormData();
-  form.append("file", new File([new Uint8Array(bytes)], claimed.filename));
-  if (claimed.custom_name) form.append("customName", claimed.custom_name);
-  const response = await processUpload(new Request(request.url, { method: "POST", body: form }));
+ const chunks = (await query("SELECT part,octet_length(contents) AS size FROM public.upload_chunks WHERE session_id=$1 ORDER BY part", [id])).rows;
+ if (chunks.length !== claimed.chunk_count) { await query("UPDATE public.upload_sessions SET state='pending' WHERE id=$1", [id]); return Response.json({ error: "Faltam partes do arquivo. Tente novamente." }, { status: 409 }); }
+ if (chunks.reduce((total,c)=>total+c.size,0) !== claimed.file_size) { await query("UPDATE public.upload_sessions SET state='error' WHERE id=$1", [id]); return Response.json({ error: "Arquivo incompleto" }, { status: 422 }); }
+ const bytes = Buffer.alloc(processingBytes(claimed.filename,claimed.file_size));
+ for (const chunk of chunks) {
+  if(chunk.part*3*1024*1024 >= bytes.length) break;
+  const row = (await query("SELECT contents FROM public.upload_chunks WHERE session_id=$1 AND part=$2", [id,chunk.part])).rows[0];
+  row.contents.copy(bytes,chunk.part*3*1024*1024);
+ }
+  const response = await processBuffer(bytes, claimed.filename, claimed.custom_name, id, claimed.file_size);
   const result = await response.json();
   await query("UPDATE public.upload_sessions SET state=$2,result=$3 WHERE id=$1", [id, response.ok ? "completed" : "error", result]);
   await query("DELETE FROM public.upload_chunks WHERE session_id=$1", [id]);
