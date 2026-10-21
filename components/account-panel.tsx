@@ -8,10 +8,13 @@ import { Button } from "@/components/ui/button";
 type Account = { enabled: boolean; testMode: boolean; email?: string; loggedIn: boolean; freeAvailable: boolean; tokens: number; tokenCost: number | null; canManage: boolean; offers: { kind: string; tokens: number; amount: number | null; currency: string; interval?: string }[] };
 export function AccountPanel() {
  const [paymentPending,setPaymentPending] = useState(false);
+ const { data: providers } = useSWR<{google:boolean;unavailable?:boolean}>("/api/auth/providers", async url => { const response=await fetch(url); if(!response.ok) throw Error("Acesso indisponível"); return response.json(); }, { revalidateOnFocus:true, dedupingInterval:10000 });
  const { data, mutate: refresh } = useSWR<Account>("/api/billing", async url => { const r = await fetch(url); if (!r.ok) throw Error("Conta indisponível"); return r.json(); }, { refreshInterval: paymentPending ? 5000 : 0, revalidateOnFocus: true });
  const [open,setOpen] = useState(false), [signup,setSignup] = useState(false), [email,setEmail] = useState(""), [password,setPassword] = useState(""), [busy,setBusy] = useState(false), [message,setMessage] = useState("");
  useEffect(() => {
-  const result = new URLSearchParams(window.location.search).get("payment");
+  const params = new URLSearchParams(window.location.search);
+  if(params.get("auth")==="error") { setOpen(true); setMessage("Não foi possível concluir o login. Se você cancelou o acesso, pode tentar novamente ou usar e-mail e senha."); }
+  const result = params.get("payment");
   if (result === "success") { setOpen(true); setPaymentPending(true); setMessage("Aguardando a confirmação do pagamento. O saldo será atualizado após a confirmação da Stripe."); const timer=setTimeout(()=>setPaymentPending(false),60000); return ()=>clearTimeout(timer); }
  }, []);
  useEffect(() => {
@@ -40,6 +43,7 @@ export function AccountPanel() {
    <DialogDescription>{data.freeAvailable ? "Sua primeira extração é gratuita." : "Seu documento gratuito já foi utilizado."} Cada extração corresponde a um envio de PDF ou ZIP; as partes do envio contam juntas.</DialogDescription>
    {data.testMode && <p className="rounded-lg border border-amber-300/40 bg-amber-950 p-3 text-sm text-amber-100">Modo de teste: nenhum pagamento real. Use somente cartões de teste da Stripe.</p>}
    {!data.loggedIn && <div className="grid gap-2 text-sm">{data.offers.map(offer=><p key={offer.kind}>{offer.kind==="subscription"?"Assinatura mensal":"Pacote avulso"}: {offer.tokens} tokens · {offer.amount !== null ? new Intl.NumberFormat("pt-BR",{style:"currency",currency:offer.currency}).format(offer.amount/100):"Consultar"}</p>)}</div>}
+   {!data.loggedIn && <div className="grid gap-2"><Button type="button" variant="outline" className="w-full border-slate-500 bg-white text-slate-950 hover:bg-slate-100 hover:text-slate-950" disabled={busy || !providers?.google} onClick={async () => { setBusy(true); setMessage(""); try { const {data: result,error}=await supabaseBrowser().auth.signInWithOAuth({provider:"google",options:{redirectTo:window.location.origin+"/auth/callback",queryParams:{prompt:"select_account"}}}); if(error)throw error; if(!result.url)throw Error("Não foi possível abrir o Google."); }catch(error){setMessage(error instanceof Error?error.message:"Não foi possível entrar com Google.");setBusy(false);} }}><span className="font-bold text-blue-600" aria-hidden="true">G</span> Entrar com Google</Button>{providers && !providers.google && <p className="text-xs text-muted-foreground">{providers.unavailable?"Login Google temporariamente indisponível. Use e-mail e senha.":"Login com Google em configuração. Use e-mail e senha por enquanto."}</p>}<p className="text-center text-xs text-muted-foreground">ou use seu e-mail</p></div>}
    {!data.loggedIn ? <form className="grid gap-3" onSubmit={async e => {
     e.preventDefault(); setBusy(true);setMessage("");
     try {
