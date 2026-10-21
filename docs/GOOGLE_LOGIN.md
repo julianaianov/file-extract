@@ -18,3 +18,6 @@ Alternativa para configuração via API: adicionar GOOGLE_CLIENT_ID, GOOGLE_CLIE
 Erros ou cancelamentos retornam à tela de acesso com uma mensagem, sem exibir detalhes sensíveis. O teste com a conta Google real depende da configuração externa e da autenticação pelo titular.
 
 Referência oficial: https://supabase.com/docs/guides/auth/social-login/auth-google
+
+## Execucao automatica
+Depois de preencher as tres variaveis locais, execute node scripts/configure-google-auth.cjs. O script habilita o provedor, ajusta Site URL e acrescenta o callback de producao sem remover os redirecionamentos existentes. Para conferir apenas a presenca das credenciais, use node scripts/configure-google-auth.cjs --check. O script nao cria o cliente OAuth no Google Cloud.
