@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { isAdministrator } from "./administrator";
 import { billingMode, walletColumns } from "./billing-mode";
 import { randomUUID } from "node:crypto";
 import { getPool, query } from "./postgres";
@@ -16,7 +17,7 @@ export function offers() {
 }
 export function tokenCost() { return positive("EXTRACTION_TOKEN_COST"); }
 export async function reserveExtraction() {
- if (!billingEnabled()) return null;
+ if (!billingEnabled() || isAdministrator()) return null;
  const actor = workspace(), wallet = walletColumns();
  await reconcileReservations(actor.owner);
  const client = await getPool().connect(), id = randomUUID();

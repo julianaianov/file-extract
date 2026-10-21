@@ -62,7 +62,7 @@ export function FileUpload({ onUploadComplete }: Props) {
       const accountResponse = await fetch("/api/billing");
       if (!accountResponse.ok) throw new Error("Não foi possível verificar seu acesso. Tente novamente.");
       const account = await accountResponse.json();
-      if (account.enabled && !account.freeAvailable && (!account.loggedIn || !account.tokenCost || account.tokens < account.tokenCost)) { window.dispatchEvent(new Event("billing-required")); throw new Error("Entre na sua conta e escolha uma assinatura ou tokens para continuar."); }
+      if (account.enabled && !account.isAdmin && !account.freeAvailable && (!account.loggedIn || !account.tokenCost || account.tokens < account.tokenCost)) { window.dispatchEvent(new Event("billing-required")); throw new Error("Entre na sua conta e escolha uma assinatura ou tokens para continuar."); }
       const result = file.size > 4 * 1024 * 1024 ? await uploadInParts(file, name.trim(), percent => { setProgress(percent); if (percent === 100) setPhase("processing"); }) : await new Promise<{
         uploadId: number;
         totalFiles: number;

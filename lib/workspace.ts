@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createServerClient, parseCookieHeader, serializeCookieHeader } from "@supabase/ssr";
 import { query, getPool } from "./postgres";
-export interface Workspace { owner: string; userId: string | null; email?: string; }
+export interface Workspace { owner: string; userId: string | null; email?: string; emailConfirmed?: boolean; }
 const context = new AsyncLocalStorage<Workspace>();
 export const billingEnabled = () => process.env.BILLING_ENABLED === "true";
 export function workspace() {
@@ -27,7 +27,7 @@ export async function identify(request: Request) {
   const { data, error } = await client.auth.getUser();
   if (error && error.status && error.status >= 500) throw new Error("Não foi possível validar a sessão");
   dataUserConfirmed = !!data.user?.email_confirmed_at;
-  if (data.user && !data.user.is_anonymous) identity = { owner: "user:" + data.user.id, userId: data.user.id, email: data.user.email };
+  if (data.user && !data.user.is_anonymous) identity = { owner: "user:" + data.user.id, userId: data.user.id, email: data.user.email, emailConfirmed: dataUserConfirmed };
  }
  if (billingEnabled()) {
   await query("INSERT INTO public.extraction_accounts(owner_key) VALUES($1) ON CONFLICT DO NOTHING", [identity.owner]);

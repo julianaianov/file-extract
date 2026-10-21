@@ -47,9 +47,21 @@ const status=async()=> (await query("SELECT token_balance,live_token_balance FRO
    billing.stripeClient=()=>({accounts:{retrieve:async()=>({charges_enabled:true})}});
    process.env.STRIPE_SECRET_KEY="sk_live_enabled_fixture";assert.equal(await ready.paymentsAvailable(),true);
   }finally{billing.stripeClient=stripeFactory;}
+  const administrator=require("../lib/administrator.ts"), previousAdmin=process.env.ADMIN_EMAIL;
+  process.env.ADMIN_EMAIL=actor.email;actor.emailConfirmed=true;
+  assert.equal(administrator.isAdministrator(),true);const before=await status();
+  assert.equal(await billing.reserveExtraction(),null);assert.deepEqual(await status(),before);
+  actor.emailConfirmed=false;assert.equal(administrator.isAdministrator(),false);
+  if(previousAdmin)process.env.ADMIN_EMAIL=previousAdmin;else delete process.env.ADMIN_EMAIL;
+  const notices=await query("SELECT kind,count(*)::int AS n FROM public.admin_notifications WHERE payload->>'owner_key'=$1 GROUP BY kind",[actor.owner]);assert.equal(notices.rows.find(n=>n.kind==="tokens.purchased").n,1);
+  const signupId=randomUUID(),client=await getPool().connect();
+  try {await client.query("BEGIN");await client.query("INSERT INTO auth.users(id,email,created_at,updated_at) VALUES($1,$2,now(),now())",[signupId,"notice-test@example.invalid"]);const notice=await client.query("SELECT kind FROM public.admin_notifications WHERE event_key=$1",["user:"+signupId]);assert.equal(notice.rows[0].kind,"user.created");}finally{await client.query("ROLLBACK");client.release();}
+  console.log("PASS: gatilho de novo usuário validado em transação revertida");
+  console.log("PASS: administrador confirmado isento e notificações de compra sem duplicação");
   console.log("PASS: carteiras teste/produção isoladas, reservas e estornos no saldo correto, reconciliação, webhook de produção idempotente, rejeição de ambiente incorreto e disponibilidade Stripe");
  }finally{
   wm.workspace=savedWorkspace;
+  await query("DELETE FROM public.admin_notifications WHERE payload->>'owner_key'=$1",[actor.owner]);
   await query("DELETE FROM public.billing_grants WHERE owner_key=$1",[actor.owner]);
   await query("DELETE FROM public.billing_orders WHERE owner_key=$1",[actor.owner]);
   await query("DELETE FROM public.extraction_charges WHERE owner_key=$1",[actor.owner]);

@@ -52,6 +52,11 @@ Aplique scripts/005-live-billing.sql antes de publicar. A carteira de teste perm
 
 Configure STRIPE_LIVE_SECRET_KEY apenas no .env.local e execute node scripts/configure-live-billing.cjs para preparar os preços, webhook e portal. A configuração privada fica em .vercel/live-billing.production.json, ignorada pelo Git. O argumento --apply-production envia apenas à Vercel Production, preservando Preview e desenvolvimento. Publique após a migração. Checkout hospedado usa a chave secreta no servidor e não exige chave publicável no navegador.
 
-A conta live configurada retornou charges_enabled=false e payouts_enabled=false. Enquanto charges_enabled não for true, o catálogo aparece com aviso e a compra fica indisponível. O servidor verifica esse estado com cache de 60 segundos. Após a liberação pela Stripe, uma nova consulta de conta libera os botões sem novo deploy. O portal de um cliente real existente continua acessível para cancelamentos, mesmo se novas compras estiverem bloqueadas.
+A verificação de produção confirmou recebimentos habilitados na conta configurada. Se charges_enabled deixar de ser true, o catálogo aparece com aviso e a compra fica indisponível. O servidor verifica esse estado com cache de 60 segundos. Após a liberação pela Stripe, uma nova consulta de conta libera os botões sem novo deploy. O portal de um cliente real existente continua acessível para cancelamentos, mesmo se novas compras estiverem bloqueadas.
 
 Verificação: scripts/check-billing-mode.cjs testa carteiras separadas, estornos entre ambientes, reconciliação, eventos assinados sem duplicação e disponibilidade. Nenhum teste faz cobrança real.
+
+## Administrador e notificações
+ADMIN_EMAIL define o e-mail administrativo. Somente uma sessão validada pelo Supabase com e-mail confirmado recebe a isenção de extrações. O saldo e a gratuidade não são consumidos; os limites técnicos de arquivo continuam valendo. O acesso aos documentos continua vinculado ao workspace da conta.
+
+Aplique scripts/006-admin-notifications.sql: novos cadastros geram avisos por gatilho em auth.users. Webhooks de compras e assinaturas confirmadas geram avisos na mesma transação da concessão de tokens, sem duplicação. A API /api/admin/notifications exige administrador confirmado, verifica a origem para marcar leituras e mostra o ambiente atual. O sino consulta novos avisos a cada 30 segundos e ao retornar à janela. Avisos de e-mail dependem de conectar um serviço de envio; o painel funciona sem SMTP.

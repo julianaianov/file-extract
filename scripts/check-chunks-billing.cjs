@@ -59,6 +59,7 @@ const request = (url,options={}) => new Request("http://localhost"+url,{...optio
   process.env.BILLING_ENABLED="false";
   for(const id of ids)await db.deleteUpload(id);
   for(const id of sessionIds)await query("DELETE FROM public.upload_sessions WHERE id=$1",[id]);
+  await query("DELETE FROM public.admin_notifications WHERE payload->>'owner_key'=$1",[owner]);
   await query("DELETE FROM public.billing_grants WHERE owner_key=$1",[owner]);await query("DELETE FROM public.billing_orders WHERE owner_key=$1",[owner]);await query("DELETE FROM public.extraction_charges WHERE owner_key=$1",[owner]);await query("DELETE FROM public.extraction_accounts WHERE owner_key=ANY($1::text[])",[[owner,"guest:"+other]]);
   if(eventIds.length)await query("DELETE FROM public.stripe_events WHERE id=ANY($1::text[])",[eventIds]);
   await getPool().end();

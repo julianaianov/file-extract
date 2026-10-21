@@ -1,3 +1,4 @@
+import { isAdministrator } from "@/lib/administrator";
 import { billingMode, walletColumns } from "@/lib/billing-mode";
 import { paymentsAvailable } from "@/lib/stripe-readiness";
 import { transaction } from "@/lib/transaction";
@@ -16,7 +17,7 @@ export const GET = withWorkspace(async () => {
   const price = await stripeClient().prices.retrieve(offer.price!);
   return { kind: offer.kind, tokens: offer.tokens, amount: price.unit_amount, currency: price.currency, interval: price.recurring?.interval };
  })) : [];
- return Response.json({ enabled: true, paymentsAvailable: configured && await paymentsAvailable(), testMode: /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || ""), email: actor.email, loggedIn: !!actor.userId, freeAvailable: !account.free_used, tokens: account.token_balance, tokenCost: tokenCost(), canManage: !!account.stripe_customer_id, offers: catalog });
+ return Response.json({ enabled: true, isAdmin: isAdministrator(), paymentsAvailable: configured && await paymentsAvailable(), testMode: /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || ""), email: actor.email, loggedIn: !!actor.userId, freeAvailable: !account.free_used, tokens: account.token_balance, tokenCost: tokenCost(), canManage: !!account.stripe_customer_id, offers: catalog });
 });
 export const POST = withWorkspace(async request => {
  if (!billingEnabled()) return Response.json({ error: "Cobrança ainda não ativada" }, { status: 503 });
