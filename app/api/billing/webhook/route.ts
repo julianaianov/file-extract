@@ -1,3 +1,4 @@
+import { billingMode, walletColumns } from "@/lib/billing-mode";
 import type Stripe from "stripe";
 import { stripeClient } from "@/lib/billing";
 import { getPool } from "@/lib/postgres";
@@ -8,6 +9,8 @@ export async function POST(request: Request) {
  const stripe = stripeClient();
  try { event = stripe.webhooks.constructEvent(await request.text(), request.headers.get("stripe-signature") || "", process.env.STRIPE_WEBHOOK_SECRET); }
  catch { return Response.json({ error: "Assinatura inválida" }, { status: 400 }); }
+ if (Boolean(event.livemode) !== (billingMode()==="live")) return Response.json({error:"Ambiente de pagamento incompatível"},{status:400});
+ const wallet=walletColumns();
  let orderId: string | undefined, source: string | undefined, customer: string | undefined, expectedKind: string | undefined, subscriptionPrice: string | undefined;
  try {
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
@@ -31,11 +34,11 @@ export async function POST(request: Request) {
    await client.query("BEGIN");
    const inserted = await client.query("INSERT INTO public.stripe_events(id,type) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id", [event.id, event.type]);
    if (inserted.rowCount && orderId && source) {
-    const order = (await client.query("SELECT o.*,a.stripe_customer_id FROM public.billing_orders o JOIN public.extraction_accounts a ON a.owner_key=o.owner_key WHERE o.id=$1", [orderId])).rows[0];
+    const order = (await client.query(`SELECT o.*,a.${wallet.customer} AS stripe_customer_id FROM public.billing_orders o JOIN public.extraction_accounts a ON a.owner_key=o.owner_key WHERE o.id=$1 AND o.billing_mode=$2`, [orderId,billingMode()])).rows[0];
     if (!order || (subscriptionPrice && subscriptionPrice !== order.price_id) || order.kind !== expectedKind || order.stripe_customer_id !== customer || !order.stripe_session_id) throw new Error("Pedido indisponível ou incompatível");
     if (expectedKind === "tokens" && source !== "checkout:" + order.stripe_session_id) throw new Error("Sessão incompatível");
-    const grant = await client.query("INSERT INTO public.billing_grants(source_id,owner_key,tokens) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING tokens", [source, order.owner_key, order.tokens]);
-    if (grant.rowCount) await client.query("UPDATE public.extraction_accounts SET token_balance=token_balance+$2 WHERE owner_key=$1", [order.owner_key, order.tokens]);
+    const grant = await client.query("INSERT INTO public.billing_grants(source_id,owner_key,tokens,billing_mode) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING tokens", [source, order.owner_key, order.tokens,billingMode()]);
+    if (grant.rowCount) await client.query(`UPDATE public.extraction_accounts SET ${wallet.balance}=${wallet.balance}+$2 WHERE owner_key=$1`, [order.owner_key, order.tokens]);
    }
    await client.query("COMMIT");
   } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }

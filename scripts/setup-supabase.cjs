@@ -15,6 +15,7 @@ const client = new Client({
     await client.query(fs.readFileSync("scripts/002-supabase.sql", "utf8"));
     await client.query(fs.readFileSync("scripts/003-accounts-billing.sql", "utf8"));
     await client.query(fs.readFileSync("scripts/004-large-files.sql", "utf8"));
+    await client.query(fs.readFileSync("scripts/005-live-billing.sql", "utf8"));
     const result = await client.query(
       "SELECT COUNT(*)::int AS total FROM public.uploads",
     );

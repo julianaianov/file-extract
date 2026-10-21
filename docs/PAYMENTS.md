@@ -1,7 +1,7 @@
 # Cobrança e arquivos grandes
 
 ## Situação
-O código suporta envio fragmentado de qualquer formato até 250 MB, login Supabase, um envio gratuito, compra de tokens e assinatura que concede tokens por fatura paga. A cobrança fica desligada enquanto BILLING_ENABLED não for true. Oferta inicial escolhida: R$29,90 por mês com 100 tokens; pacote avulso de 20 tokens por R$14,90; 1 token por envio. Créditos acumulam sem expiração. Stripe configurada em modo de teste.
+O código suporta envio fragmentado de qualquer formato até 250 MB, login Supabase, um envio gratuito, compra de tokens e assinatura que concede tokens por fatura paga. BILLING_ENABLED ativa as contas e regras de acesso; a compra depende também de a Stripe liberar recebimentos. Oferta inicial escolhida: R$29,90 por mês com 100 tokens; pacote avulso de 20 tokens por R$14,90; 1 token por envio. Créditos acumulam sem expiração. Produção usa sua própria conta Stripe e carteira; desenvolvimento mantém a configuração de teste.
 
 ## Regras a definir antes da ativação
 - Um documento corresponde a um envio de um arquivo; fragmentos e arquivos internos do ZIP não consomem créditos adicionais.
@@ -46,3 +46,12 @@ Uma função interrompida abruptamente pode deixar uma sessão em processamento.
 - scripts/check-interface.cjs: interface, busca e tutorial.
 
 Envios aceitam qualquer extensão até 250 MB. Arquivos maiores que 4 MB usam partes de 3 MB; as partes não geram cobranças adicionais. O armazenamento segmentado requer scripts/004-large-files.sql. ZIPs mantêm o limite de 1000 itens e 250 MB descompactados. Formatos sem leitor são preservados para download. A biblioteca abre por envio e os filtros mostram somente seus itens.
+
+## Produção
+Aplique scripts/005-live-billing.sql antes de publicar. A carteira de teste permanece em token_balance/stripe_customer_id; a carteira real começa em live_token_balance/live_stripe_customer_id. Reservas, pedidos e concessões registram billing_mode. Estornos usam o ambiente da reserva original. O webhook rejeita eventos de ambiente diferente do servidor. A gratuidade continua única por identidade.
+
+Configure STRIPE_LIVE_SECRET_KEY apenas no .env.local e execute node scripts/configure-live-billing.cjs para preparar os preços, webhook e portal. A configuração privada fica em .vercel/live-billing.production.json, ignorada pelo Git. O argumento --apply-production envia apenas à Vercel Production, preservando Preview e desenvolvimento. Publique após a migração. Checkout hospedado usa a chave secreta no servidor e não exige chave publicável no navegador.
+
+A conta live configurada retornou charges_enabled=false e payouts_enabled=false. Enquanto charges_enabled não for true, o catálogo aparece com aviso e a compra fica indisponível. O servidor verifica esse estado com cache de 60 segundos. Após a liberação pela Stripe, uma nova consulta de conta libera os botões sem novo deploy. O portal de um cliente real existente continua acessível para cancelamentos, mesmo se novas compras estiverem bloqueadas.
+
+Verificação: scripts/check-billing-mode.cjs testa carteiras separadas, estornos entre ambientes, reconciliação, eventos assinados sem duplicação e disponibilidade. Nenhum teste faz cobrança real.
