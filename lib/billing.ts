@@ -1,3 +1,4 @@
+import { extractionUnits } from "./upload-capacity";
 import Stripe from "stripe";
 import { isAdministrator } from "./administrator";
 import { billingMode, walletColumns } from "./billing-mode";
@@ -15,8 +16,8 @@ export function offers() {
   { kind: "subscription" as const, price: process.env.STRIPE_SUBSCRIPTION_PRICE_ID, tokens: positive("STRIPE_SUBSCRIPTION_TOKENS") },
  ].filter(o => o.price && o.tokens);
 }
-export function tokenCost() { return positive("EXTRACTION_TOKEN_COST"); }
-export async function reserveExtraction() {
+export function tokenCost(size = 1) { const base = positive("EXTRACTION_TOKEN_COST"); if (!base) return null; const cost = base * extractionUnits(size); return Number.isSafeInteger(cost) && cost <= 2147483647 ? cost : null; }
+export async function reserveExtraction(size = 1) {
  if (!billingEnabled() || isAdministrator()) return null;
  const actor = workspace(), wallet = walletColumns();
  await reconcileReservations(actor.owner);
@@ -28,7 +29,7 @@ export async function reserveExtraction() {
   let source = "free", amount = 0;
   if (account.free_used) {
    if (!actor.userId) throw new BillingError("Seu documento gratuito já foi utilizado. Entre na sua conta para continuar.", 401);
-   const cost = tokenCost();
+   const cost = tokenCost(size);
    if (!cost) throw new BillingError("A cobrança está sendo configurada. Tente novamente em breve.", 503);
    if (account[wallet.balance] < cost) throw new BillingError("Você precisa de uma assinatura ou de tokens para extrair outro documento.", 402);
    source = "tokens"; amount = cost;

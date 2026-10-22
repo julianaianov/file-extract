@@ -1,8 +1,8 @@
 BEGIN;
 ALTER TABLE public.upload_sessions DROP CONSTRAINT IF EXISTS upload_sessions_file_size_check;
-ALTER TABLE public.upload_sessions ADD CONSTRAINT upload_sessions_file_size_check CHECK(file_size > 0 AND file_size <= 262144000);
+ALTER TABLE public.upload_sessions ADD CONSTRAINT upload_sessions_file_size_check CHECK(file_size > 0);
 ALTER TABLE public.upload_sessions DROP CONSTRAINT IF EXISTS upload_sessions_chunk_count_check;
-ALTER TABLE public.upload_sessions ADD CONSTRAINT upload_sessions_chunk_count_check CHECK(chunk_count BETWEEN 1 AND 84);
+ALTER TABLE public.upload_sessions ADD CONSTRAINT upload_sessions_chunk_count_check CHECK(chunk_count > 0);
 CREATE TABLE IF NOT EXISTS public.file_content_parts (
  path text NOT NULL REFERENCES public.file_contents(path) ON DELETE CASCADE,
  part integer NOT NULL CHECK(part >= 0),

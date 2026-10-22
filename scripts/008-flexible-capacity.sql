@@ -1,0 +1,10 @@
+BEGIN;
+ALTER TABLE public.upload_sessions DROP CONSTRAINT IF EXISTS upload_sessions_file_size_check;
+ALTER TABLE public.upload_sessions DROP CONSTRAINT IF EXISTS upload_sessions_chunk_count_check;
+ALTER TABLE public.upload_sessions ALTER COLUMN file_size TYPE bigint;
+ALTER TABLE public.upload_sessions ALTER COLUMN chunk_count TYPE bigint;
+ALTER TABLE public.upload_chunks ALTER COLUMN part TYPE bigint;
+ALTER TABLE public.file_content_parts ALTER COLUMN part TYPE bigint;
+ALTER TABLE public.upload_sessions ADD CONSTRAINT upload_sessions_file_size_check CHECK(file_size > 0 AND file_size <= 9007199254740991);
+ALTER TABLE public.upload_sessions ADD CONSTRAINT upload_sessions_chunk_count_check CHECK(chunk_count > 0 AND chunk_count = (file_size + 3145727) / 3145728);
+COMMIT;

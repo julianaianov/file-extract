@@ -16,7 +16,7 @@ import { randomUUID } from "crypto";
 
 
 
-const MAX_BYTES = 250 * 1024 * 1024;
+import { automaticParseAvailable, validFileSize } from "./upload-capacity";
 const MAX_EXTRACTED_BYTES = 250 * 1024 * 1024;
 function fileInfo(name: string): {
   type: ExtractedFile["file_type"];
@@ -68,12 +68,12 @@ function fileInfo(name: string): {
 }
 export function processingBytes(filename:string, size:number) {
  const ext=path.extname(filename).toLowerCase();
- return ext===".zip" || ext===".pdf" ? size : fileInfo(filename).type==="text" ? Math.min(size,4000000) : 0;
+ return ext===".zip" || ext===".pdf" ? (automaticParseAvailable(filename,size) ? size : Math.min(size,1024)) : fileInfo(filename).type==="text" ? Math.min(size,4000000) : 0;
 }
 export async function processUpload(request: Request) {
  const form = await request.formData(), file = form.get("file");
  if (!(file instanceof File)) return NextResponse.json({error:"Nenhum arquivo enviado"},{status:400});
- if (!file.size || file.size > MAX_BYTES) return NextResponse.json({error:"Envie um arquivo de até 250 MB"},{status:413});
+ if (!validFileSize(file.size) || file.size > 4 * 1024 * 1024) return NextResponse.json({error:"Use o envio em partes para arquivos acima de 4 MB"},{status:413});
  return processBuffer(Buffer.from(await file.arrayBuffer()), file.name, form.get("customName"));
 }
 export async function processBuffer(buffer: Buffer, filename: string, customName: unknown, sessionId?: string, sourceSize = buffer.length) {
@@ -83,9 +83,9 @@ export async function processBuffer(buffer: Buffer, filename: string, customName
   let charge: string | null = null;
   try {
     const extension = path.extname(file.name).toLowerCase();
-    if (!file.size || file.size > MAX_BYTES)
+    if (!validFileSize(file.size))
       return NextResponse.json(
-        { error: "O arquivo deve ter entre 1 byte e 250 MB" },
+        { error: "Tamanho de arquivo inválido" },
         { status: 413 },
       );
     if (
@@ -97,7 +97,8 @@ export async function processBuffer(buffer: Buffer, filename: string, customName
         { status: 422 },
       );
     let entries: ReturnType<AdmZip["getEntries"]> | null = null;
-    if (extension === ".zip") {
+    const parseAvailable = automaticParseAvailable(file.name, file.size);
+    if (extension === ".zip" && parseAvailable) {
       try {
         entries = new AdmZip(buffer)
           .getEntries()
@@ -127,7 +128,7 @@ export async function processBuffer(buffer: Buffer, filename: string, customName
     }
     const uniqueId = randomUUID(),
       savedFilename = uniqueId + extension;
-    charge = await reserveExtraction();
+    charge = await reserveExtraction(file.size);
     uploadId = await createUpload(
       savedFilename,
       typeof customName === "string" && customName.trim()
@@ -146,6 +147,7 @@ export async function processBuffer(buffer: Buffer, filename: string, customName
         }))
       : [{ name: file.name, key: uniqueId + "/0", data: () => buffer }];
     const warnings: string[] = [];
+    const capacityWarning = parseAvailable ? undefined : "Original salvo integralmente para download. A extração automática de PDF/ZIP acima de 250 MB não está disponível neste servidor; o conteúdo ainda não foi extraído.";
     let extractedBytes = 0;
     for (const entry of extracted) {
       const data = entry.data(),
@@ -154,14 +156,14 @@ export async function processBuffer(buffer: Buffer, filename: string, customName
       if (entries && extractedBytes > MAX_EXTRACTED_BYTES)
         throw new Error("Limite de descompactação excedido");
       let text: string | null = null,
-        warning: string | undefined,
+        warning: string | undefined = capacityWarning,
         status: string | undefined;
-      if (info.mime === "application/pdf") {
+      if (info.mime === "application/pdf" && parseAvailable) {
         const result = await extractPdfText(data);
         text = result.text;
         warning = result.warning;
         status = result.status;
-      } else if (info.type === "text")
+      } else if (info.type === "text" && parseAvailable)
         text = data
           .subarray(0, 4000000).toString("utf8")
           .replace(/\u0000/g, "")

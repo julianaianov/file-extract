@@ -1,3 +1,4 @@
+import { validFileSize, TOKEN_BLOCK_BYTES } from "@/lib/upload-capacity";
 import { isAdministrator } from "@/lib/administrator";
 import { billingMode, walletColumns } from "@/lib/billing-mode";
 import { paymentsAvailable } from "@/lib/stripe-readiness";
@@ -7,7 +8,10 @@ import { withWorkspace, billingEnabled, workspace } from "@/lib/workspace";
 import { query } from "@/lib/postgres";
 import { offers, stripeClient, tokenCost, reconcileReservations } from "@/lib/billing";
 export const runtime = "nodejs";
-export const GET = withWorkspace(async () => {
+export const GET = withWorkspace(async request => {
+ const requestedSize = new URL(request.url).searchParams.get("size");
+ const size = requestedSize === null ? 1 : Number(requestedSize);
+ if (!validFileSize(size)) return Response.json({error:"Tamanho de arquivo inválido"},{status:400});
  if (!billingEnabled()) return Response.json({ enabled: false });
  const actor = workspace(), wallet = walletColumns();
  await reconcileReservations(actor.owner);
@@ -17,7 +21,7 @@ export const GET = withWorkspace(async () => {
   const price = await stripeClient().prices.retrieve(offer.price!);
   return { kind: offer.kind, tokens: offer.tokens, amount: price.unit_amount, currency: price.currency, interval: price.recurring?.interval };
  })) : [];
- return Response.json({ enabled: true, isAdmin: isAdministrator(), paymentsAvailable: configured && await paymentsAvailable(), testMode: /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || ""), email: actor.email, loggedIn: !!actor.userId, freeAvailable: !account.free_used, tokens: account.token_balance, tokenCost: tokenCost(), canManage: !!account.stripe_customer_id, offers: catalog });
+ return Response.json({ enabled: true, isAdmin: isAdministrator(), paymentsAvailable: configured && await paymentsAvailable(), testMode: /^(sk|rk)_test_/.test(process.env.STRIPE_SECRET_KEY || ""), email: actor.email, loggedIn: !!actor.userId, freeAvailable: !account.free_used, tokens: account.token_balance, tokenCost: tokenCost(size), tokenBlockBytes: TOKEN_BLOCK_BYTES, canManage: !!account.stripe_customer_id, offers: catalog });
 });
 export const POST = withWorkspace(async request => {
  if (!billingEnabled()) return Response.json({ error: "Cobrança ainda não ativada" }, { status: 503 });

@@ -1,0 +1,14 @@
+const fs=require("fs"),{spawnSync}=require("child_process"),{chromium,expect:baseExpect}=require("@playwright/test");const expect=baseExpect.configure({timeout:30000});
+const base=process.argv[2];if(!base)throw Error("Informe o preview");
+(async()=>{const r=spawnSync(process.execPath,[require("./vercel-cli.cjs"),"curl","/","--deployment",base,"--","--silent","--show-error","--header","x-vercel-set-bypass-cookie:true","--cookie-jar",".vercel/capacity.cookies"],{encoding:"utf8",timeout:90000,maxBuffer:5*1024*1024,windowsHide:true});if(r.status!==0)throw Error("Falha ao abrir preview");
+const browser=await chromium.launch({headless:true,executablePath:"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"});
+try{const context=await browser.newContext();const lines=fs.readFileSync(".vercel/capacity.cookies","utf8").split(/\r?\n/).filter(l=>l&&(!l.startsWith("#")||l.startsWith("#HttpOnly_")));await context.addCookies(lines.map(l=>{const p=l.replace(/^#HttpOnly_/,"").split("\t");return{domain:p[0],path:p[2],secure:p[3]==="TRUE",name:p[5],value:p[6],httpOnly:l.startsWith("#HttpOnly_")}}));
+await context.addInitScript(()=>localStorage.setItem("file-extract:guide:v1","seen"));
+const page=await context.newPage();await page.route("**/api/**",async route=>{const u=new URL(route.request().url());if(u.pathname==="/api/billing")return route.fulfill({json:{enabled:true,loggedIn:true,freeAvailable:false,tokens:100,tokenCost:Math.ceil(Number(u.searchParams.get("size")||1)/262144000),offers:[],testMode:true}});return route.fulfill({json:u.pathname==="/api/files"?[]:{uploads:[],total:0,files:[]}})});
+await page.goto(base,{waitUntil:"domcontentloaded",timeout:120000});
+await page.getByRole("button",{name:"Abrir tutorial"}).click();await page.getByRole("button",{name:"Pular tutorial"}).click();
+await page.evaluate(()=>{const input=document.querySelector('input[type="file"]');const file=new File(["simulated"],"huge.zip");Object.defineProperty(file,"size",{value:5*1024**3});Object.defineProperty(input,"files",{configurable:true,value:[file]});input.dispatchEvent(new Event("change",{bubbles:true}));});
+await expect(page.getByRole("button",{name:"Salvar original"})).toBeEnabled();await expect(page.getByText(/Este envio utiliza 21 token/)).toBeVisible();await expect(page.getByText(/o conteúdo não será extraído/)).toBeVisible();
+await page.setViewportSize({width:390,height:844});await expect(page.getByRole("button",{name:"Salvar original"})).toBeVisible();
+console.log("PASS: arquivo simulado de 5 GB selecionado no navegador, custo de 21 tokens, aviso de extração e botão Salvar original em desktop e celular. Nenhum upload real.");
+}finally{await browser.close();}})().catch(e=>{console.error(e.message);process.exitCode=1});

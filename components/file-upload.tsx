@@ -1,7 +1,7 @@
 "use client";
 
 import { uploadInParts } from "@/lib/upload-parts";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -17,9 +17,11 @@ import { Button } from "@/components/ui/button";
 interface Props {
   onUploadComplete?: (result: { uploadId: number; totalFiles: number }) => void;
 }
-const maxBytes = 250 * 1024 * 1024;
+import { automaticParseAvailable } from "@/lib/upload-capacity";
 export function FileUpload({ onUploadComplete }: Props) {
   const input = useRef<HTMLInputElement>(null);
+  const [quoteError,setQuoteError]=useState("");
+  const [quote,setQuote]=useState<{free:boolean;admin:boolean;cost:number|null}|null>(null);
   const [file, setFile] = useState<File | null>(null),
     [name, setName] = useState(""),
     [dragging, setDragging] = useState(false);
@@ -30,12 +32,14 @@ export function FileUpload({ onUploadComplete }: Props) {
     [message, setMessage] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const busy = phase === "uploading" || phase === "processing";
+  useEffect(()=>{setQuote(null);setQuoteError("");if(!file)return;const controller=new AbortController();fetch("/api/billing?size="+file.size,{signal:controller.signal}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(a=>setQuote({free:!a.enabled||a.freeAvailable,admin:!!a.isAdmin,cost:a.tokenCost})).catch(()=>{if(!controller.signal.aborted)setQuoteError("Não foi possível consultar o custo. Selecione o arquivo novamente.");});return()=>controller.abort();},[file]);
   const select = (candidate?: File) => {
     if (!candidate) return;
+    setQuote(null);
     setWarnings([]);
-    if (!candidate.size || candidate.size > maxBytes) {
+    if (!Number.isSafeInteger(candidate.size) || !candidate.size) {
       setFile(null);
-      setMessage("Escolha um arquivo de até 250 MB.");
+      setMessage("Escolha um arquivo com tamanho válido.");
       setPhase("error");
       return;
     }
@@ -59,7 +63,7 @@ export function FileUpload({ onUploadComplete }: Props) {
     setProgress(0);
     setMessage("");
     try {
-      const accountResponse = await fetch("/api/billing");
+      const accountResponse = await fetch("/api/billing?size="+file.size);
       if (!accountResponse.ok) throw new Error("Não foi possível verificar seu acesso. Tente novamente.");
       const account = await accountResponse.json();
       if (account.enabled && !account.isAdmin && !account.freeAvailable && (!account.loggedIn || !account.tokenCost || account.tokens < account.tokenCost)) { window.dispatchEvent(new Event("billing-required")); throw new Error("Entre na sua conta e escolha uma assinatura ou tokens para continuar."); }
@@ -89,7 +93,7 @@ export function FileUpload({ onUploadComplete }: Props) {
             reject(
               new Error(
                 xhr.status === 413
-                  ? "O arquivo excede o limite de envio. Use um arquivo de até 250 MB."
+                  ? "O envio direto excedeu a capacidade. Use o envio em partes."
                   : "Não foi possível processar o arquivo. Tente novamente.",
               ),
             );
@@ -185,7 +189,7 @@ export function FileUpload({ onUploadComplete }: Props) {
           {busy ? (
             "Seu conteúdo está a caminho da biblioteca."
           ) : file ? (
-            (file.size / 1024 / 1024).toFixed(2) + " MB · pronto para extrair"
+            (file.size / 1024 / 1024).toFixed(2) + (automaticParseAvailable(file.name,file.size) ? " MB · pronto para extrair" : " MB · original para download")
           ) : (
             <>
               ou{" "}
@@ -204,7 +208,7 @@ export function FileUpload({ onUploadComplete }: Props) {
             <span>
               <FileText size={12} /> PDF
             </span>
-            <span className="format-limit">Todos os formatos · até 250 MB · envio em partes automático</span>
+            <span className="format-limit">Todos os formatos · envio em partes · capacidade conforme armazenamento</span>
           </div>
         )}
         {busy && (
@@ -235,7 +239,11 @@ export function FileUpload({ onUploadComplete }: Props) {
         )}
       </label>
       {file && !busy && (
-        <div className="selected-upload">
+        <div className="selected-upload flex-wrap">
+          <div className="w-full basis-full space-y-2 text-sm" aria-live="polite">
+            <p>{quote ? quote.admin ? "Administrador: sem cobrança." : quote.free ? "Seu primeiro documento é gratuito." : quote.cost ? "Este envio utiliza " + quote.cost + " token(s), descontados ao concluir. O custo considera blocos de 250 MB." : "Não foi possível calcular o custo deste envio." : quoteError || "Consultando o custo do envio..."}</p>
+            {!automaticParseAvailable(file.name,file.size) && <p className="text-amber-200">O original será salvo integralmente para download. A extração automática de PDF/ZIP acima de 250 MB ainda não está disponível; o conteúdo não será extraído.</p>}
+          </div>
           <label className="upload-name">
             Como quer chamar este upload?
             <input
@@ -246,8 +254,8 @@ export function FileUpload({ onUploadComplete }: Props) {
             />
           </label>
           <div className="flex items-center gap-2">
-            <Button onClick={send} className="upload-submit">
-              Extrair arquivo <ArrowUpRight size={17} />
+            <Button onClick={send} disabled={!quote || (!quote.free && !quote.admin && !quote.cost)} className="upload-submit">
+              {automaticParseAvailable(file.name,file.size) ? "Extrair arquivo" : "Salvar original"} <ArrowUpRight size={17} />
             </Button>
             <Button
               variant="ghost"

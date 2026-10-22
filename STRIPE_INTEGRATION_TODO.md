@@ -49,3 +49,7 @@ O SDK instalado usa por padrão 2026-09-30.endive. Uma chamada isolada de teste 
 Novos avisos ficam no painel e na fila. Registros antigos permanecem apenas no painel. Falhas do provedor são reagendadas; a entrega não altera saldos nem a confirmação financeira. O serviço ainda não envia e-mails sem a credencial e o remetente autorizados.
 
 Recursos: https://support.stripe.com · https://docs.stripe.com/mcp · https://resend.com/docs
+
+## Capacidade e custo
+
+O envio do original não tem mais o teto fixo de 250 MB. A cobrança utiliza blocos iniciados de 250 MB e o custo é mostrado antes do envio. Primeiro documento e administrador continuam com suas isenções. Consulte [capacidade e limites de extração](CAPACIDADE.md). Arquivos PDF/ZIP acima da capacidade automática são guardados com aviso explícito, sem declarar extração do conteúdo.

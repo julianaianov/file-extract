@@ -6,7 +6,7 @@ import { highlight } from "./search-excerpts";
 import { Button } from "@/components/ui/button";
 const key = "file-extract:guide:v1";
 const steps = [
-  { title: "Seus arquivos, em poucos passos", text: "Envie qualquer formato de até 250 MB, incluindo áudio e imagem diretamente. Arquivos grandes são transferidos em partes automaticamente.", icon: Upload },
+  { title: "Seus arquivos, em poucos passos", text: "Envie qualquer formato, incluindo áudio e imagem diretamente. Arquivos grandes são transferidos em partes automaticamente.", icon: Upload },
   { title: "Explore sua biblioteca", text: "Selecione um envio na biblioteca para ver apenas seus arquivos. Dentro dele, filtre por tipo, palavra ou data. Volte a Todos os envios para trocar de pacote.", icon: Sparkles },
   { title: "Encontre a palavra e o contexto", text: "A busca procura no nome e no texto disponível. Você vê duas linhas acima e duas abaixo. Ao abrir o arquivo, o termo fica marcado. Experimente abaixo!", icon: FileSearch },
   { title: "Ouça, leia e descubra", text: "Nos áudios, aperte o play e ajuste o volume ou avance pela gravação. Nas imagens, use Extrair texto para fazer OCR. A transcrição de áudio depende de estar habilitada; ouvir não depende dela.", icon: Headphones },

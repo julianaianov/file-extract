@@ -15,9 +15,10 @@ export const PUT = withWorkspace(async (request: Request, context: Context) => {
   await client.query("BEGIN");
   const session = (await client.query("SELECT * FROM public.upload_sessions WHERE id=$1 AND owner_key=$2 AND expires_at > now() FOR UPDATE", [id, workspace().owner])).rows[0];
   if (!session || session.state !== "pending") { await client.query("ROLLBACK"); return Response.json({ error: "Envio indisponível ou expirado" }, { status: 409 }); }
-  const expected = part === session.chunk_count - 1 ? session.file_size - part * 3 * 1024 * 1024 : 3 * 1024 * 1024;
-  if (part >= session.chunk_count || bytes.length !== expected) { await client.query("ROLLBACK"); return Response.json({ error: "Tamanho ou número da parte inválido" }, { status: 400 }); }
+  const expected = part === Number(session.chunk_count) - 1 ? Number(session.file_size) - part * 3 * 1024 * 1024 : 3 * 1024 * 1024;
+  if (part >= Number(session.chunk_count) || bytes.length !== expected) { await client.query("ROLLBACK"); return Response.json({ error: "Tamanho ou número da parte inválido" }, { status: 400 }); }
   await client.query("INSERT INTO public.upload_chunks(session_id,part,contents) VALUES($1,$2,$3) ON CONFLICT(session_id,part) DO UPDATE SET contents=EXCLUDED.contents", [id, part, bytes]);
+  await client.query("UPDATE public.upload_sessions SET expires_at=now()+interval '24 hours' WHERE id=$1",[id]);
   await client.query("COMMIT"); return Response.json({ received: part });
  } catch(e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
 });
@@ -31,16 +32,15 @@ export const POST = withWorkspace(async (request: Request, context: Context) => 
   return previous?.state === "completed" ? Response.json(previous.result) : Response.json({ error: "Envio expirado, em processamento ou já encerrado" }, { status: 409 });
  }
  try {
- const chunks = (await query("SELECT part,octet_length(contents) AS size FROM public.upload_chunks WHERE session_id=$1 ORDER BY part", [id])).rows;
- if (chunks.length !== claimed.chunk_count) { await query("UPDATE public.upload_sessions SET state='pending' WHERE id=$1", [id]); return Response.json({ error: "Faltam partes do arquivo. Tente novamente." }, { status: 409 }); }
- if (chunks.reduce((total,c)=>total+c.size,0) !== claimed.file_size) { await query("UPDATE public.upload_sessions SET state='error' WHERE id=$1", [id]); return Response.json({ error: "Arquivo incompleto" }, { status: 422 }); }
- const bytes = Buffer.alloc(processingBytes(claimed.filename,claimed.file_size));
- for (const chunk of chunks) {
-  if(chunk.part*3*1024*1024 >= bytes.length) break;
-  const row = (await query("SELECT contents FROM public.upload_chunks WHERE session_id=$1 AND part=$2", [id,chunk.part])).rows[0];
-  row.contents.copy(bytes,chunk.part*3*1024*1024);
+ const summary = (await query("SELECT count(*) AS count,coalesce(sum(octet_length(contents)),0) AS size FROM public.upload_chunks WHERE session_id=$1",[id])).rows[0];
+ if (Number(summary.count) !== Number(claimed.chunk_count)) { await query("UPDATE public.upload_sessions SET state='pending' WHERE id=$1", [id]); return Response.json({ error: "Faltam partes do arquivo. Tente novamente." }, { status: 409 }); }
+ if (Number(summary.size) !== Number(claimed.file_size)) { await query("UPDATE public.upload_sessions SET state='error' WHERE id=$1", [id]); return Response.json({ error: "Arquivo incompleto" }, { status: 422 }); }
+ const bytes = Buffer.alloc(processingBytes(claimed.filename,Number(claimed.file_size)));
+ for (let part = 0; part * 3 * 1024 * 1024 < bytes.length; part++) {
+  const row = (await query("SELECT contents FROM public.upload_chunks WHERE session_id=$1 AND part=$2", [id,part])).rows[0];
+  row.contents.copy(bytes,part*3*1024*1024,0,Math.min(row.contents.length,bytes.length-part*3*1024*1024));
  }
-  const response = await processBuffer(bytes, claimed.filename, claimed.custom_name, id, claimed.file_size);
+  const response = await processBuffer(bytes, claimed.filename, claimed.custom_name, id, Number(claimed.file_size));
   const result = await response.json();
   await query("UPDATE public.upload_sessions SET state=$2,result=$3 WHERE id=$1", [id, response.ok ? "completed" : "error", result]);
   await query("DELETE FROM public.upload_chunks WHERE session_id=$1", [id]);

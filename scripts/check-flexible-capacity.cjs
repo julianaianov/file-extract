@@ -1,0 +1,32 @@
+// Simulated capacity checks: no database connection and no large file allocation.
+const fs=require("fs"),path=require("path"),assert=require("node:assert/strict"),ts=require("typescript"),Module=require("module");
+let session,stored,uploadSize,charged;let enabled=false,balance=10;
+const query=async(sql,args=[])=>{
+if(sql.includes("count(*)::int AS count"))return{rows:[{count:0}]};
+if(sql.startsWith("SELECT free_used"))return{rows:[{free_used:true,tokens:balance}]};
+if(sql.startsWith("INSERT INTO public.upload_sessions")){session={id:args[0],filename:args[2],file_size:String(args[4]),chunk_count:String(args[5])};return{rows:[]}};
+if(sql.includes("state='processing'")&&sql.includes("RETURNING"))return{rows:[session]};
+if(sql.includes("coalesce(sum(octet_length"))return{rows:[{count:session.chunk_count,size:session.file_size}]};
+if(sql.startsWith("SELECT contents"))return{rows:[{contents:Buffer.alloc(1024)}]};
+if(sql.includes("FROM public.extraction_accounts")&&sql.includes("FOR UPDATE"))return{rows:[{free_used:true,token_balance:balance}]};
+if(sql.includes("SET token_balance=token_balance-$2"))charged=args[1];
+return{rows:[]}};
+const pg={query,getPool:()=>({connect:async()=>({query,release(){}})})};
+const wm={withWorkspace:fn=>fn,billingEnabled:()=>enabled,workspace:()=>({owner:"user:fixture",userId:"fixture"})};
+const admin={isAdministrator:()=>false},db={createUpload:async(_n,_o,size)=>{uploadSize=size;return 7},createExtractedFile:async()=>8,updateUploadStatus:async()=>{},updateFileMetadata:async()=>{},deleteUpload:async()=>{}};
+const mocks={"./postgres":pg,"@/lib/postgres":pg,"./workspace":wm,"@/lib/workspace":wm,"./administrator":admin,"@/lib/administrator":admin,"@/lib/db":db,"@/lib/storage":{saveSessionFile:async(_k,_u,id)=>{stored=id},saveStoredFile:async()=>{throw Error("Não remontar original")}},"./pdf":{extractPdfText:async()=>{throw Error("Não extrair PDF grande")}}};
+mocks["@/lib/pdf"]=mocks["./pdf"];
+const original=Module._load;Module._load=function(name,parent,...args){return mocks[name]||original.call(this,name,parent,...args)};
+const resolve=Module._resolveFilename;Module._resolveFilename=function(name,parent,...args){return resolve.call(this,name.startsWith("@/")?path.join(process.cwd(),name.slice(2)):name,parent,...args)};
+require.extensions[".ts"]=(mod,file)=>mod._compile(ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,file);
+const bill=require("../lib/billing.ts"),processing=require("../lib/process-upload.ts"),sessions=require("../app/api/upload/sessions/route.ts"),parts=require("../app/api/upload/sessions/[id]/route.ts");
+const req=size=>new Request("https://example.invalid/sessions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({size,filename:"large.zip"})});
+(async()=>{process.env.EXTRACTION_TOKEN_COST="1";process.env.STRIPE_SECRET_KEY="sk_test_fixture";
+assert.equal(bill.tokenCost(250*1024**2),1);assert.equal(bill.tokenCost(251*1024**2),2);assert.equal(bill.tokenCost(1024**3),5);
+assert.equal(processing.processingBytes("huge.zip",5*1024**3),1024);assert.equal(processing.processingBytes("huge.mp3",5*1024**3),0);
+for(const size of [251*1024**2,5*1024**3])assert.equal((await sessions.POST(req(size))).status,200);
+const r=await parts.POST(new Request("https://example.invalid/finalize",{method:"POST"}),{params:Promise.resolve({id:session.id})});const result=await r.json();assert.equal(r.status,200,JSON.stringify(result));assert.equal(uploadSize,5*1024**3);assert.equal(stored,session.id);assert.ok(result.warnings[0].includes("ainda não foi extraído"));
+enabled=true;balance=1;assert.equal((await sessions.POST(req(251*1024**2))).status,402);balance=10;await bill.reserveExtraction(251*1024**2);assert.equal(charged,2);
+assert.equal((await sessions.POST(req(0))).status,400);
+console.log("PASS: 251 MB e 5 GB simulados, memória limitada, aviso de extração e custo proporcional. Nenhum acesso externo.");
+})().catch(e=>{console.error(e);process.exitCode=1});

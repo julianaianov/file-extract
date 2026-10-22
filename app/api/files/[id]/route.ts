@@ -71,7 +71,7 @@ async function handleGET(request: Request, context: Context) {
         }
         return NextResponse.json({
           type: "other",
-          message: "Tipo de arquivo não suportado para visualização",
+          message: pdfWarning(file.metadata) || "Tipo de arquivo não suportado para visualização",
         });
       }
       return NextResponse.json(file);
