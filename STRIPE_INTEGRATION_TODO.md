@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-A API e a interface suportam o formulário incorporado com client_secret. customer, metadata e subscription_data.metadata foram preservados conforme autorizado, mantendo a entrega de tokens pelo webhook. O formulário é ativado quando a chave publicável corresponde ao modo da chave secreta. Sem pk_live_, produção mantém o checkout hospedado funcional.
+A API e a interface suportam o formulário incorporado com client_secret. customer, metadata e subscription_data.metadata foram preservados conforme autorizado, mantendo a entrega de tokens pelo webhook. O formulário é ativado quando a chave publicável corresponde ao modo da chave secreta. A chave publicável live foi configurada na Vercel em 21/10/2026. O Stripe.js real carregou as ações do formulário com sucesso usando a chave de produção; a sessão de verificação foi encerrada sem pagamento.
 
 ## Values to Replace
 
@@ -12,7 +12,6 @@ Não há placeholders de preço ou modo na chamada existente. Os preços reais v
 
 | Credencial ou decisão pendente | Ação |
 |---|---|
-| NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | Configurar a chave pk_live_ de produção para o formulário no navegador. A chave secreta permanece apenas no servidor. |
 | RESEND_API_KEY e NOTIFICATION_FROM | Conectar uma chave própria do Resend e um remetente autorizado para enviar avisos a ADMIN_EMAIL. Nenhuma senha SMTP do Supabase foi copiada. |
 
 ## Configured Parameters
@@ -33,9 +32,9 @@ O SDK instalado usa por padrão 2026-09-30.endive. Uma chamada isolada de teste 
 
 ## Setup and next steps
 
-1. Configurar NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY com a pk_live_ da mesma conta da chave secreta em produção e republicar. A pk_test_ já informada serve apenas ao ambiente de testes.
+1. NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY já está configurada com a chave live na Vercel. O ambiente local mantém a chave test para desenvolvimento. Ao trocar as chaves no futuro, manter pública e secreta na mesma conta e modo e republicar.
 2. O endpoint retorna client_secret para sessões form e reutiliza sessões de assinatura compatíveis. mode, preços reais e vínculos de cobrança foram preservados.
-3. O cliente já está preparado em [formulário incorporado](components/stripe-checkout-form.tsx) e [tela de conta](components/account-panel.tsx), aceitando client_secret sem redirecionamento. Ainda deve ser validado com o endpoint migrado e a chave publicável correta. Carregar Stripe.js diretamente de https://js.stripe.com/dahlia/stripe.js no head, montar o formulário e tratar confirmação e erros. Form não usa redirecionamento para session.url.
+3. O cliente já está preparado em [formulário incorporado](components/stripe-checkout-form.tsx) e [tela de conta](components/account-panel.tsx), aceitando client_secret sem redirecionamento. A chave live foi validada com uma sessão de produção e Stripe.js real, sem pagamento. Carregar Stripe.js diretamente de https://js.stripe.com/dahlia/stripe.js no head, montar o formulário e tratar confirmação e erros. Form não usa redirecionamento para session.url.
 4. Manter concessões idempotentes de tokens pelo webhook e notificações após pagamentos confirmados.
 5. Para e-mails: executar npm run db:setup, configurar RESEND_API_KEY e NOTIFICATION_FROM no .env.local, então node scripts/configure-notification-email.cjs --apply-production e publicar. O script gera a autenticação do job, protege-a no Supabase Vault e agenda a fila a cada minuto.
 6. Validar o formulário com chaves de teste e o cartão de teste 4242 4242 4242 4242, validade futura e CVC de teste. Nunca usar cartões de teste em produção. Depois validar a configuração live sem efetuar pagamentos de teste com cartões reais.
