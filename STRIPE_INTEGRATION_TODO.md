@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-O checkout hospedado de produção já funciona para tokens e assinatura. A migração para o formulário incorporado ainda depende das decisões e credenciais abaixo; os parâmetros novos ainda não foram aplicados à cobrança ativa.
+A API e a interface suportam o formulário incorporado com client_secret. customer, metadata e subscription_data.metadata foram preservados conforme autorizado, mantendo a entrega de tokens pelo webhook. O formulário é ativado quando a chave publicável corresponde ao modo da chave secreta. Sem pk_live_, produção mantém o checkout hospedado funcional.
 
 ## Values to Replace
 
@@ -13,14 +13,13 @@ Não há placeholders de preço ou modo na chamada existente. Os preços reais v
 | Credencial ou decisão pendente | Ação |
 |---|---|
 | NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | Configurar a chave pk_live_ de produção para o formulário no navegador. A chave secreta permanece apenas no servidor. |
-| Vínculos customer e metadata | Confirmar se devem ser preservados, ou se o webhook também pode ser adaptado para vincular pagamentos sem esses campos. O webhook atual depende desses vínculos para conceder tokens. |
 | RESEND_API_KEY e NOTIFICATION_FROM | Conectar uma chave própria do Resend e um remetente autorizado para enviar avisos a ADMIN_EMAIL. Nenhuma senha SMTP do Supabase foi copiada. |
 
 ## Configured Parameters
 
-**Destino da alteração:** [API de cobrança](app/api/billing/route.ts). Valores solicitados no Checkout Studio, ainda pendentes de aplicação à integração ativa:
+**Destino da alteração:** [API de cobrança](app/api/billing/route.ts). Valores aplicados às sessões de formulário incorporado:
 
-| Parâmetro | Valor solicitado |
+| Parâmetro | Valor |
 |---|---|
 | ui_mode | form |
 | billing_address_collection | auto |
@@ -30,12 +29,12 @@ Não há placeholders de preço ou modo na chamada existente. Os preços reais v
 | submit_type | auto |
 | integration_identifier | custom_embedded_web_0001 |
 
-O SDK instalado usa por padrão 2026-09-30.endive. Uma chamada isolada de teste com a versão 2026-03-25.dahlia confirmou ui_mode=form, client_secret preenchido e session.url nulo; a sessão foi encerrada sem pagamento. Uma segunda verificação com o Stripe.js real montou o formulário, carregou loadActions com sucesso e confirmou a existência das ações e métodos de limpeza, sem pagamento. O fluxo do componente foi testado com SDK simulado e a fila de e-mail com transporte simulado. A migração deve alinhar a versão e o cliente juntos. O código ativo não foi alterado apenas para passar nessa verificação.
+O SDK instalado usa por padrão 2026-09-30.endive. Uma chamada isolada de teste com a versão 2026-03-25.dahlia confirmou ui_mode=form, client_secret preenchido e session.url nulo; a sessão foi encerrada sem pagamento. Uma segunda verificação com o Stripe.js real montou o formulário, carregou loadActions com sucesso e confirmou a existência das ações e métodos de limpeza, sem pagamento. O fluxo do componente foi testado com SDK simulado e a fila de e-mail com transporte simulado. As chamadas de criação e leitura do formulário usam explicitamente 2026-03-25.dahlia junto ao Stripe.js Dahlia, sem alterar a versão das demais operações financeiras.
 
 ## Setup and next steps
 
-1. Resolver o vínculo de contas e fornecer a chave publicável de produção.
-2. Alterar somente o necessário na chamada existente e no retorno/reuso de sessão para fornecer client_secret. Manter mode e preços reais; não inserir preços de exemplo.
+1. Configurar NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY com a pk_live_ da mesma conta da chave secreta em produção e republicar. A pk_test_ já informada serve apenas ao ambiente de testes.
+2. O endpoint retorna client_secret para sessões form e reutiliza sessões de assinatura compatíveis. mode, preços reais e vínculos de cobrança foram preservados.
 3. O cliente já está preparado em [formulário incorporado](components/stripe-checkout-form.tsx) e [tela de conta](components/account-panel.tsx), aceitando client_secret sem redirecionamento. Ainda deve ser validado com o endpoint migrado e a chave publicável correta. Carregar Stripe.js diretamente de https://js.stripe.com/dahlia/stripe.js no head, montar o formulário e tratar confirmação e erros. Form não usa redirecionamento para session.url.
 4. Manter concessões idempotentes de tokens pelo webhook e notificações após pagamentos confirmados.
 5. Para e-mails: executar npm run db:setup, configurar RESEND_API_KEY e NOTIFICATION_FROM no .env.local, então node scripts/configure-notification-email.cjs --apply-production e publicar. O script gera a autenticação do job, protege-a no Supabase Vault e agenda a fila a cada minuto.

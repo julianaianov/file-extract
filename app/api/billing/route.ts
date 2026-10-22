@@ -31,6 +31,8 @@ export const POST = withWorkspace(async request => {
  if(input.kind !== "portal" && !await paymentsAvailable()) return Response.json({error:"Pagamentos temporariamente indisponíveis. A conta Stripe aguarda liberação para recebimentos."},{status:503});
  try { return await transaction(async client => {
   const stripe = stripeClient();
+  const formEnabled = (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "").startsWith("pk_" + billingMode() + "_");
+  const formOptions = { apiVersion: "2026-03-25.dahlia" };
   let customer = (await client.query(`SELECT ${wallet.customer} AS stripe_customer_id FROM public.extraction_accounts WHERE owner_key=$1 FOR UPDATE`, [actor.owner])).rows[0]?.stripe_customer_id;
   if(input.kind === "portal" && !customer) return Response.json({error:"Nenhum pagamento vinculado à sua conta neste ambiente."},{status:400});
   if (!customer) {
@@ -49,8 +51,12 @@ export const POST = withWorkspace(async request => {
   if (offer.kind === "subscription") {
    const existing = (await client.query("SELECT stripe_session_id FROM public.billing_orders WHERE owner_key=$1 AND billing_mode=$2 AND kind='subscription' AND stripe_session_id IS NOT NULL ORDER BY created_at DESC LIMIT 1", [actor.owner,billingMode()])).rows[0];
    if (existing) {
-    const previous = await stripe.checkout.sessions.retrieve(existing.stripe_session_id);
-    if (previous.status === "open" && previous.url) return Response.json({ url: previous.url });
+    const previous = await stripe.checkout.sessions.retrieve(existing.stripe_session_id, {}, formEnabled ? formOptions : {});
+    if (previous.status === "open") {
+     if (formEnabled && previous.ui_mode === "form" && previous.client_secret) return Response.json({ client_secret: previous.client_secret });
+     if (!formEnabled && previous.url) return Response.json({ url: previous.url });
+     await stripe.checkout.sessions.expire(previous.id);
+    }
    }
   }
   const id = randomUUID();
@@ -59,9 +65,14 @@ export const POST = withWorkspace(async request => {
    customer, mode: offer.kind === "subscription" ? "subscription" : "payment",
    line_items: [{ price: offer.price!, quantity: 1 }], metadata: { order_id: id },
    ...(offer.kind === "subscription" ? { subscription_data: { metadata: { order_id: id } } } : {}),
-   success_url: appUrl + "/?payment=success", cancel_url: appUrl + "/?payment=canceled",
-  }, { idempotencyKey: "checkout:" + id });
+   ...(formEnabled ? {
+    ui_mode: "form" as const, billing_address_collection: "auto" as const,
+    phone_number_collection: { enabled: false }, automatic_tax: { enabled: false },
+    ...(offer.kind === "subscription" ? { payment_method_collection: "always" as const } : {}),
+    submit_type: "auto" as const, integration_identifier: "custom_embedded_web_0001",
+   } : { success_url: appUrl + "/?payment=success", cancel_url: appUrl + "/?payment=canceled" }),
+  }, { idempotencyKey: "checkout:" + id, ...(formEnabled ? formOptions : {}) });
   await client.query("UPDATE public.billing_orders SET stripe_session_id=$2 WHERE id=$1", [id, session.id]);
-  return Response.json({ url: session.url });
+  return Response.json(formEnabled ? { client_secret: session.client_secret } : { url: session.url });
  }); } catch { return Response.json({ error: "Não foi possível abrir o pagamento. Tente novamente." }, { status: 503 }); }
 });
