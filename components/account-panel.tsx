@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import useSWR, { mutate } from "swr";
+import { StripeCheckoutForm } from "./stripe-checkout-form";
 import { AdminNotifications } from "./admin-notifications";
 import { UserRound, Coins, Loader2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase-browser";
@@ -8,6 +9,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Button } from "@/components/ui/button";
 type Account = { enabled: boolean; isAdmin?:boolean; paymentsAvailable?: boolean; testMode: boolean; email?: string; loggedIn: boolean; freeAvailable: boolean; tokens: number; tokenCost: number | null; canManage: boolean; offers: { kind: string; tokens: number; amount: number | null; currency: string; interval?: string }[] };
 export function AccountPanel() {
+ const [clientSecret,setClientSecret]=useState<string|null>(null);
  const [paymentPending,setPaymentPending] = useState(false);
  const { data: providers } = useSWR<{google:boolean;unavailable?:boolean}>("/api/auth/providers", async url => { const response=await fetch(url); if(!response.ok) throw Error("Acesso indisponível"); return response.json(); }, { revalidateOnFocus:true, dedupingInterval:10000 });
  const { data, mutate: refresh } = useSWR<Account>("/api/billing", async url => { const r = await fetch(url); if (!r.ok) throw Error("Conta indisponível"); return r.json(); }, { refreshInterval: paymentPending ? 5000 : 0, revalidateOnFocus: true });
@@ -16,8 +18,9 @@ export function AccountPanel() {
   const params = new URLSearchParams(window.location.search);
   if(params.get("auth")==="error") { setOpen(true); setMessage("Não foi possível concluir o login. Se você cancelou o acesso, pode tentar novamente ou usar e-mail e senha."); }
   const result = params.get("payment");
-  if (result === "success") { setOpen(true); setPaymentPending(true); setMessage("Aguardando a confirmação do pagamento. O saldo será atualizado após a confirmação da Stripe."); const timer=setTimeout(()=>setPaymentPending(false),60000); return ()=>clearTimeout(timer); }
+  if (result === "success") { setOpen(true); setPaymentPending(true); setMessage("Aguardando a confirmação do pagamento. O saldo será atualizado após a confirmação da Stripe.");  }
  }, []);
+ useEffect(()=>{if(!paymentPending)return;const timer=setTimeout(()=>setPaymentPending(false),60000);return()=>clearTimeout(timer);},[paymentPending]);
  useEffect(() => {
   const required = () => { setOpen(true); setMessage("Entre na sua conta e escolha uma assinatura ou pacote de tokens para continuar."); void refresh(); };
   const updated = () => { void refresh(); };
@@ -34,14 +37,18 @@ export function AccountPanel() {
   setBusy(true); setMessage("");
   try {
    const r = await fetch("/api/billing", { method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind}) }), result = await r.json();
-   if (!r.ok) throw Error(result.error); window.location.assign(result.url);
+   if (!r.ok) throw Error(result.error);
+   if(typeof result.client_secret==="string"){setClientSecret(result.client_secret);setBusy(false);return;}
+   if(!result.url)throw Error("Não foi possível abrir o pagamento.");
+   window.location.assign(result.url);
   } catch(e) { setMessage(e instanceof Error ? e.message : "Pagamento indisponível"); setBusy(false); }
  };
  return <>
   <button className="guide-launch" aria-label={data.isAdmin ? "Administrador" : data.loggedIn ? data.tokens+" tokens" : "Entrar / Planos"} onClick={() => setOpen(true)}><UserRound size={16}/><span>{data.isAdmin ? "Administrador" : data.loggedIn ? data.tokens + " tokens" : "Entrar / Planos"}</span></button>
   {data.isAdmin && <AdminNotifications/>}
-  <Dialog open={open} onOpenChange={setOpen}><DialogContent overlayClassName="guide-overlay" className="guide-dialog" style={{backgroundColor:"#101722",backgroundImage:"none",zIndex:101}}>
-   <DialogTitle>Seu acesso ao File Extract</DialogTitle>
+  <Dialog open={open} onOpenChange={value=>{setOpen(value);if(!value)setClientSecret(null);}}> <DialogContent overlayClassName="guide-overlay" className="guide-dialog" style={{backgroundColor:"#101722",backgroundImage:"none",zIndex:101}}>
+   <DialogTitle>{clientSecret?"Pagamento seguro":"Seu acesso ao File Extract"}</DialogTitle>
+   {clientSecret ? <StripeCheckoutForm clientSecret={clientSecret} onCancel={()=>setClientSecret(null)} onComplete={()=>{setClientSecret(null);setPaymentPending(true);setMessage("Aguardando confirmação do pagamento pela Stripe.");void refresh();}}/> : <>
    <DialogDescription>{data.isAdmin ? "Seu acesso administrativo permite extrações sem cobrança." : data.freeAvailable ? "Sua primeira extração é gratuita." : "Seu documento gratuito já foi utilizado."} Cada extração corresponde a um envio de arquivo; as partes do envio contam juntas.</DialogDescription>
    {data.testMode && <p className="rounded-lg border border-amber-300/40 bg-amber-950 p-3 text-sm text-amber-100">Modo de teste: nenhum pagamento real. Use somente cartões de teste da Stripe.</p>}
    {!data.testMode && data.paymentsAvailable === false && <p role="status" className="rounded-lg border border-amber-300/40 bg-amber-950 p-3 text-sm text-amber-100">Pagamentos temporariamente indisponíveis. Os planos serão liberados assim que a Stripe habilitar os recebimentos. Você pode entrar na conta e usar seu acesso gratuito ou saldo existente.</p>}
@@ -66,6 +73,7 @@ export function AccountPanel() {
     <Button variant="ghost" disabled={busy} onClick={async()=>{await supabaseBrowser().auth.signOut(); window.location.reload();}}>Sair da conta</Button>
    </div>}
    {message && <p role="status" className="text-sm text-cyan-200">{message}</p>}
+   </>}
   </DialogContent></Dialog>
  </>;
 }

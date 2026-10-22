@@ -1,0 +1,28 @@
+const fs=require("fs"),path=require("path"),Module=require("module"),ts=require("typescript"),assert=require("node:assert/strict");
+const resolve=Module._resolveFilename;Module._resolveFilename=function(name,parent,...rest){return resolve.call(this,name.startsWith("@/")?path.join(process.cwd(),name.slice(2)):name,parent,...rest);};
+require.extensions[".ts"]=(mod,file)=>mod._compile(ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,file);
+const db=require("../lib/postgres.ts"),savedQuery=db.query,savedFetch=global.fetch,updates=[],calls=[];
+let claimed=true,status=200,networkError=false;
+const row={id:42,kind:"tokens.purchased",payload:{email:"customer@example.invalid",tokens:20,amount:1490,currency:"brl"},created_at:new Date().toISOString(),email_attempts:1};
+db.query=async(sql,args)=>{if(sql.startsWith("WITH candidates"))return{rows:claimed?[row]:[]};updates.push({sql,args});return{rows:[]};};
+global.fetch=async(url,options)=>{calls.push({url,options});if(networkError)throw Error("sensitive provider error re_fixture_secret");return new Response("{}",{status});};
+const mail=require("../lib/notification-email.ts"),{POST:worker}=require("../app/api/admin/notifications/deliver/route.ts");
+(async()=>{try{
+ delete process.env.RESEND_API_KEY;process.env.STRIPE_SECRET_KEY="sk_live_fixture";process.env.NOTIFICATION_FROM="File Extract <sender@example.invalid>";process.env.ADMIN_EMAIL="admin@example.invalid";
+ assert.equal((await mail.deliverNotificationEmails()).configured,false);assert.equal(calls.length,0);
+ process.env.RESEND_API_KEY="re_fixture_secret";process.env.STRIPE_SECRET_KEY="sk_test_fixture";
+ assert.equal((await mail.deliverNotificationEmails()).sent,0);assert.equal(calls.length,0);
+ process.env.STRIPE_SECRET_KEY="sk_live_fixture";
+ assert.equal((await mail.deliverNotificationEmails()).sent,1);
+ const body=JSON.parse(calls[0].options.body);assert.deepEqual(body.to,["admin@example.invalid"]);assert.equal(calls[0].url,"https://api.resend.com/emails");assert.equal(calls[0].options.headers["Idempotency-Key"],"file-extract-notification-42");assert.ok(body.text.includes("customer@example.invalid"));
+ assert.ok(updates[0].sql.includes("email_sent_at=now()"));
+ updates.length=0;status=429;
+ assert.equal((await mail.deliverNotificationEmails()).failed,1);assert.equal(updates[0].args[1],"HTTP 429");assert.equal(updates[0].args[2],60);
+ updates.length=0;networkError=true;
+ assert.equal((await mail.deliverNotificationEmails()).failed,1);assert.ok(!JSON.stringify(updates).includes("re_fixture_secret"));
+ process.env.NOTIFICATION_JOB_SECRET="fixture-job-secret";
+ assert.equal((await worker(new Request("https://example.invalid/api/admin/notifications/deliver",{method:"POST",headers:{authorization:"Bearer wrong"}}))).status,401);
+ networkError=false;status=200;claimed=false;
+ const response=await worker(new Request("https://example.invalid/api/admin/notifications/deliver",{method:"POST",headers:{authorization:"Bearer fixture-job-secret"}}));assert.equal(response.status,200);assert.equal((await response.json()).sent,0);
+ console.log("PASS: e-mail sem credenciais não consome fila; teste não envia; destinatário fixo, idempotência, erro com reagendamento, segredos protegidos e autenticação do worker");
+}finally{db.query=savedQuery;global.fetch=savedFetch;}})().catch(e=>{console.error(e);process.exitCode=1;});

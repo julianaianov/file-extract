@@ -69,7 +69,7 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
     await context.addInitScript(()=>localStorage.setItem("file-extract:guide:v1","seen"));
     const page=await context.newPage(),errors=[];page.on("pageerror",e=>errors.push(e.message));
     let available=false,admin=false,read=false;
-    await page.route("**/api/billing",route=>route.fulfill({json:{enabled:true,isAdmin:admin,testMode:false,paymentsAvailable:available,email:"teste@example.invalid",loggedIn:true,freeAvailable:true,tokens:0,tokenCost:1,canManage:false,offers:[{kind:"tokens",tokens:20,amount:1490,currency:"brl"},{kind:"subscription",tokens:100,amount:2990,currency:"brl",interval:"month"}]}}));
+    await page.route("**/api/billing",route=>route.request().method()==="POST"?route.fulfill({json:{client_secret:"cs_test_fixture_secret"}}):route.fulfill({json:{enabled:true,isAdmin:admin,testMode:false,paymentsAvailable:available,email:"teste@example.invalid",loggedIn:true,freeAvailable:true,tokens:0,tokenCost:1,canManage:false,offers:[{kind:"tokens",tokens:20,amount:1490,currency:"brl"},{kind:"subscription",tokens:100,amount:2990,currency:"brl",interval:"month"}]}}));
     await page.route("**/api/auth/providers",route=>route.fulfill({json:{google:true}}));
     await page.goto(base,{waitUntil:"networkidle",timeout:120000});
     await page.getByRole("button",{name:"0 tokens",exact:true}).click();
@@ -82,6 +82,19 @@ const base = process.argv[2] || "http://127.0.0.1:3000",
     await expect(dialog.getByRole("button",{name:/Comprar tokens/})).toBeEnabled();
     await expect(dialog.getByRole("button",{name:/Assinar/})).toBeEnabled();
     await expect(dialog.getByText(/Pagamentos temporariamente indisponíveis/)).toHaveCount(0);
+    await page.evaluate(()=>{
+     window.Stripe=()=>({initCheckoutFormSdk:options=>{
+      window.__formAppearance=options.appearance;
+      let element;
+      return {createForm:()=>({mount:selector=>{element=document.createElement("button");element.textContent="Confirmar pagamento de teste";document.querySelector(selector).appendChild(element);},on:(_,handler)=>element.onclick=()=>handler({fixture:true}),destroy:()=>element?.remove()}),loadActions:async()=>({type:"success",actions:{confirm:async args=>{window.__formConfirmed=!!args.formConfirmEvent;return {type:"success"};}}})};
+     }});
+    });
+    await dialog.getByRole("button",{name:/Comprar tokens/}).click();
+    await expect(page.getByRole("heading",{name:"Pagamento seguro",exact:true})).toBeVisible();
+    await page.getByRole("button",{name:"Confirmar pagamento de teste",exact:true}).click();
+    await expect(dialog).toContainText("Aguardando confirmação do pagamento pela Stripe.");
+    expect(await page.evaluate(()=>window.__formConfirmed)).toBe(true);
+    expect(await page.evaluate(()=>window.__formAppearance.variables.colorPrimary)).toBe("#0570de");
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.keyboard.press("Escape");
